@@ -78,7 +78,7 @@ train_model "ms_coco" 32 5
 # --predictor_path=EXP_NUMBER (e.g., 00000)
 
 generate_samples() {
-    torchrun --standalone --nproc_per_node=8 --master_port=22222 \
+    torchrun --standalone --nproc_per_node=1 --master_port=22222 \
         sample.py \
         --predictor_path="$1" \
         --batch="$2" \
@@ -89,8 +89,8 @@ generate_samples() {
 generate_samples 0 128 "0-49999"
 
 ## B.2 Stable Diffusion ##
-generate_samples 0 32 "0-29999"
-generate_samples "/work/nvme/betk/zli42/EPD/exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl" 16 "0-29999"
+generate_samples 0 32 "0-29"
+generate_samples "/work/nvme/betk/zli42/RLEPD/exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl" 2 "0-29"
 
 
 ##########################
