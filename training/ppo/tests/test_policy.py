@@ -99,6 +99,74 @@ class PolicySamplingTest(unittest.TestCase):
         grads = [p.grad for p in policy.parameters() if p.grad is not None]
         self.assertTrue(any(torch.any(torch.isfinite(g)) for g in grads))
 
+    def test_sample_positions_strictly_increasing(self) -> None:
+        torch.manual_seed(111)
+        policy = EPDParamPolicy(num_steps=5, num_points=3)
+        step_indices = torch.tensor([0, 2, 3], dtype=torch.long)
+        output = policy(step_indices)
+        sample = policy.sample_table(output)
+        diffs = sample.positions[..., 1:] - sample.positions[..., :-1]
+        self.assertTrue(torch.all(diffs > 0))
+
+    def test_sample_weights_on_simplex(self) -> None:
+        torch.manual_seed(222)
+        policy = EPDParamPolicy(num_steps=4, num_points=3)
+        step_indices = torch.tensor([1, 2], dtype=torch.long)
+        output = policy(step_indices)
+        sample = policy.sample_table(output)
+        sums = sample.weights.sum(dim=-1)
+        self.assertTrue(torch.allclose(sums, torch.ones_like(sums), atol=1e-6))
+
+
+class PolicyInitAndContextTest(unittest.TestCase):
+    def test_load_dirichlet_init_updates_buffers(self) -> None:
+        policy = EPDParamPolicy(num_steps=4, num_points=2)
+        alpha_pos = np.full((3, 3), 5.0, dtype=np.float64)
+        alpha_weight = np.full((3, 2), 7.0, dtype=np.float64)
+        init = DirichletInit(
+            alpha_pos=alpha_pos,
+            alpha_weight=alpha_weight,
+            mean_pos_segments=alpha_pos / alpha_pos.sum(axis=-1, keepdims=True),
+            mean_weights=alpha_weight / alpha_weight.sum(axis=-1, keepdims=True),
+            invalid_pos_rows=np.zeros(3, dtype=bool),
+            invalid_weight_rows=np.zeros(3, dtype=bool),
+            concentration=5.0,
+        )
+        policy.load_dirichlet_init(init)
+        step_indices = torch.tensor([0, 1, 2], dtype=torch.long)
+        output = policy(step_indices)
+        mean_segments = policy._normalize(output.alpha_pos)
+        _, mean_weights = policy.mean_table(output)
+        np.testing.assert_allclose(
+            mean_segments.detach().cpu().numpy(),
+            init.mean_pos_segments,
+            atol=1e-5,
+        )
+        np.testing.assert_allclose(
+            mean_weights.detach().cpu().numpy(),
+            init.mean_weights,
+            atol=1e-5,
+        )
+
+    def test_context_dimension_validation(self) -> None:
+        policy = EPDParamPolicy(num_steps=4, num_points=2, context_dim=8)
+        step_indices = torch.tensor([0, 1], dtype=torch.long)
+        bad_context = torch.randn(2, 4)
+        with self.assertRaises(ValueError):
+            _ = policy(step_indices, context=bad_context)
+
+    def test_context_influences_output(self) -> None:
+        torch.manual_seed(555)
+        policy = EPDParamPolicy(num_steps=4, num_points=2, context_dim=4)
+        with torch.no_grad():
+            policy.output_linear.weight.normal_(mean=0.0, std=0.05)
+        step_indices = torch.tensor([0, 1], dtype=torch.long)
+        zero_context = torch.zeros(2, 4)
+        random_context = torch.randn(2, 4)
+        out_zero = policy(step_indices, context=zero_context)
+        out_random = policy(step_indices, context=random_context)
+        self.assertFalse(torch.allclose(out_zero.alpha_pos, out_random.alpha_pos))
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

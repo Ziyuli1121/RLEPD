@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from training.ppo import cold_start
 from training.ppo.cold_start import (
     EPDTable,
     build_dirichlet_params,
@@ -85,6 +86,64 @@ class FallbackBehaviourTest(unittest.TestCase):
 
         np.testing.assert_allclose(init.mean_pos_segments[0], uniform_segments, atol=1e-12)
         np.testing.assert_allclose(init.mean_weights[0], uniform_weights, atol=1e-12)
+
+
+class SanitizationTest(unittest.TestCase):
+    def test_out_of_order_rows_are_sorted_and_flagged(self) -> None:
+        positions = np.array([[0.8, 0.2], [0.1, 0.9]], dtype=np.float64)
+        weights = np.array([[0.3, 0.7], [0.6, 0.4]], dtype=np.float64)
+        scale_dir = np.array([[1.2, 0.9], [1.0, 1.0]], dtype=np.float64)
+
+        (
+            sanitized_positions,
+            sanitized_weights,
+            sanitized_scale_dir,
+            sanitized_scale_time,
+            reordered_rows,
+            adjusted_rows,
+        ) = cold_start._sanitize_table_arrays(  # type: ignore[attr-defined]
+            positions=positions,
+            weights=weights,
+            scale_dir=scale_dir,
+            scale_time=None,
+        )
+
+        # First row should be sorted in ascending order.
+        np.testing.assert_array_equal(sanitized_positions[0], np.sort(positions[0]))
+        # Weights and scale_dir should follow the same permutation.
+        np.testing.assert_array_equal(sanitized_weights[0], weights[0][[1, 0]])
+        np.testing.assert_array_equal(sanitized_scale_dir[0], scale_dir[0][[1, 0]])
+
+        self.assertTrue(reordered_rows[0])
+        self.assertFalse(reordered_rows[1])
+        self.assertFalse(adjusted_rows.any(), "No adjustments expected beyond sorting.")
+        self.assertIsNone(sanitized_scale_time)
+
+    def test_duplicate_positions_are_slightly_separated(self) -> None:
+        positions = np.array([[0.5, 0.5], [0.2, 0.7]], dtype=np.float64)
+        weights = np.array([[0.4, 0.6], [0.3, 0.7]], dtype=np.float64)
+
+        (
+            sanitized_positions,
+            sanitized_weights,
+            _,
+            _,
+            _,
+            adjusted_rows,
+        ) = cold_start._sanitize_table_arrays(  # type: ignore[attr-defined]
+            positions=positions,
+            weights=weights,
+            scale_dir=None,
+            scale_time=None,
+        )
+
+        # First row should now be strictly increasing.
+        self.assertGreater(sanitized_positions[0, 1] - sanitized_positions[0, 0], 0.0)
+        # Adjusted rows flag must be true for the duplicate row.
+        self.assertTrue(adjusted_rows[0])
+        self.assertFalse(adjusted_rows[1])
+        # Weights should remain untouched aside from potential permutation.
+        np.testing.assert_array_equal(sanitized_weights[0], weights[0])
 
 
 if __name__ == "__main__":  # pragma: no cover
