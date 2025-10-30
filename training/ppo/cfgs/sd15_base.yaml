@@ -1,0 +1,41 @@
+run:
+  output_root: "exps"
+  run_name: "sd15_rl_base"
+  seed: 0
+
+data:
+  predictor_snapshot: "exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl"
+  prompt_csv: null  # use default MS-COCO prompts when null
+
+model:
+  dataset_name: "ms_coco"
+  guidance_type: "cfg"
+  guidance_rate: 7.5
+  schedule_type: "discrete"
+  schedule_rho: 1.0
+  num_steps: null     # will be inferred from predictor snapshot when null
+  num_points: null    # will be inferred from predictor snapshot when null
+
+reward:
+  weights_path: "weights/HPS_v2.1_compressed.pt"
+  batch_size: 2
+  enable_amp: true
+  cache_dir: "weights"
+
+ppo:
+  rollout_batch_size: 4
+  rloo_k: 2
+  ppo_epochs: 1
+  minibatch_size: 2
+  learning_rate: 5.0e-5
+  clip_range: 0.2
+  kl_coef: 0.01
+  entropy_coef: 0.0
+  max_grad_norm: 1.0
+  decode_rgb: true
+  steps: 10
+  dirichlet_concentration: 200.0
+
+logging:
+  log_interval: 1
+  save_interval: 5
