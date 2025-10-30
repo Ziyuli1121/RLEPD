@@ -87,6 +87,31 @@ class PolicySamplingTest(unittest.TestCase):
 
         torch.testing.assert_close(sample.log_prob, manual_log_prob, atol=1e-6, rtol=1e-6)
 
+    def test_log_prob_method_aligns_with_sample(self) -> None:
+        torch.manual_seed(42)
+        policy = EPDParamPolicy(num_steps=4, num_points=2)
+        step_indices = torch.tensor([0, 1], dtype=torch.long)
+        output = policy(step_indices)
+        sample = policy.sample_table(output)
+
+        method_logprob = policy.log_prob(output, sample.segments, sample.weights)
+        torch.testing.assert_close(
+            method_logprob, sample.log_prob, atol=1e-6, rtol=1e-6
+        )
+
+    def test_entropy_method_matches_distribution(self) -> None:
+        torch.manual_seed(7)
+        policy = EPDParamPolicy(num_steps=3, num_points=2)
+        step_indices = torch.tensor([0, 1], dtype=torch.long)
+        output = policy(step_indices)
+
+        dir_pos = torch.distributions.Dirichlet(output.alpha_pos)
+        dir_weight = torch.distributions.Dirichlet(output.alpha_weight)
+        manual_entropy = dir_pos.entropy() + dir_weight.entropy()
+
+        computed_entropy = policy.entropy(output)
+        torch.testing.assert_close(computed_entropy, manual_entropy, atol=1e-6, rtol=1e-6)
+
     def test_autograd_flow(self) -> None:
         torch.manual_seed(321)
         policy = EPDParamPolicy(num_steps=3, num_points=2)
@@ -119,6 +144,25 @@ class PolicySamplingTest(unittest.TestCase):
 
 
 class PolicyInitAndContextTest(unittest.TestCase):
+    def test_kl_to_base_zero_for_cold_start(self) -> None:
+        alpha_pos = np.full((3, 3), 6.0, dtype=np.float64)
+        alpha_weight = np.full((3, 2), 4.0, dtype=np.float64)
+        init = DirichletInit(
+            alpha_pos=alpha_pos,
+            alpha_weight=alpha_weight,
+            mean_pos_segments=alpha_pos / alpha_pos.sum(axis=-1, keepdims=True),
+            mean_weights=alpha_weight / alpha_weight.sum(axis=-1, keepdims=True),
+            invalid_pos_rows=np.zeros(3, dtype=bool),
+            invalid_weight_rows=np.zeros(3, dtype=bool),
+            concentration=6.0,
+        )
+        policy = EPDParamPolicy(num_steps=4, num_points=2, dirichlet_init=init)
+        step_indices = torch.tensor([0, 1, 2], dtype=torch.long)
+        output = policy(step_indices)
+
+        kl = policy.kl_to_base(output, step_indices)
+        torch.testing.assert_close(kl, torch.zeros_like(kl), atol=1e-6, rtol=1e-6)
+
     def test_load_dirichlet_init_updates_buffers(self) -> None:
         policy = EPDParamPolicy(num_steps=4, num_points=2)
         alpha_pos = np.full((3, 3), 5.0, dtype=np.float64)

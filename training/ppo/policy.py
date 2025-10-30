@@ -243,6 +243,45 @@ class EPDParamPolicy(nn.Module):
             entropy_weight=entropy_weight,
         )
 
+    def log_prob(
+        self,
+        policy_output: PolicyOutput,
+        segments: torch.Tensor,
+        weights: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute log-probability of provided segments/weights under the policy's
+        Dirichlet distributions.
+        """
+
+        dir_pos = Dirichlet(policy_output.alpha_pos)
+        dir_weight = Dirichlet(policy_output.alpha_weight)
+        log_prob_pos = dir_pos.log_prob(segments)
+        log_prob_weight = dir_weight.log_prob(weights)
+        return log_prob_pos + log_prob_weight
+
+    def entropy(self, policy_output: PolicyOutput) -> torch.Tensor:
+        """Return the entropy of the Dirichlet factors for diagnostic purposes."""
+
+        dir_pos = Dirichlet(policy_output.alpha_pos)
+        dir_weight = Dirichlet(policy_output.alpha_weight)
+        return dir_pos.entropy() + dir_weight.entropy()
+
+    def kl_to_base(
+        self,
+        policy_output: PolicyOutput,
+        step_indices: torch.Tensor,
+    ) -> torch.Tensor:
+        """
+        Compute KL divergence between the current policy factors and the
+        cold-start (baseline) Dirichlet parameters.
+        """
+
+        base_alpha_pos, base_alpha_weight = self._get_base_alpha(step_indices)
+        kl_pos = self._dirichlet_kl(policy_output.alpha_pos, base_alpha_pos)
+        kl_weight = self._dirichlet_kl(policy_output.alpha_weight, base_alpha_weight)
+        return kl_pos + kl_weight
+
     @torch.no_grad()
     def load_dirichlet_init(self, dirichlet_init: "DirichletInit") -> None:
         """
@@ -281,6 +320,28 @@ class EPDParamPolicy(nn.Module):
         alpha_pos = alpha_pos.clamp_min(self.dirichlet_alpha_eps)
         alpha_weight = alpha_weight.clamp_min(self.dirichlet_alpha_eps)
         return alpha_pos, alpha_weight
+
+    def _get_base_alpha(
+        self,
+        step_indices: torch.Tensor,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        base_pos = torch.exp(self.base_log_alpha_pos.index_select(0, step_indices))
+        base_weight = torch.exp(self.base_log_alpha_weight.index_select(0, step_indices))
+        return base_pos, base_weight
+
+    @staticmethod
+    def _dirichlet_kl(p_alpha: torch.Tensor, q_alpha: torch.Tensor) -> torch.Tensor:
+        """
+        KL divergence KL(p || q) for Dirichlet distributions with parameters p_alpha, q_alpha.
+        """
+
+        sum_p = p_alpha.sum(dim=-1)
+        sum_q = q_alpha.sum(dim=-1)
+        term1 = torch.lgamma(sum_p) - torch.lgamma(sum_q)
+        term2 = torch.lgamma(p_alpha).sum(dim=-1) - torch.lgamma(q_alpha).sum(dim=-1)
+        digamma_diff = torch.digamma(p_alpha) - torch.digamma(sum_p.unsqueeze(-1))
+        term3 = ((p_alpha - q_alpha) * digamma_diff).sum(dim=-1)
+        return term1 - term2 + term3
 
     @staticmethod
     def _normalize(tensor: torch.Tensor) -> torch.Tensor:
