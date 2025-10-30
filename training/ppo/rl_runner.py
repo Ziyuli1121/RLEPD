@@ -258,14 +258,20 @@ class EPDRolloutRunner:
         self.prompt_cursor = index % len(self.prompts)
 
     def _sample_prompts_and_seeds(self, batch_size: int) -> Tuple[List[str], List[int]]:
+        if batch_size % self.rloo_k != 0:
+            raise RuntimeError(
+                f"batch_size ({batch_size}) must be divisible by rloo_k ({self.rloo_k})."
+            )
         prompts: List[str] = []
         seeds: List[int] = []
-        for _ in range(batch_size):
+        unique_prompts = batch_size // self.rloo_k
+        for _ in range(unique_prompts):
             prompt = self.prompts[self.prompt_cursor]
-            prompts.append(prompt)
-            seed = int(self.seed_rng.randint(0, 2**32 - 1))
-            seeds.append(seed)
             self.prompt_cursor = (self.prompt_cursor + 1) % len(self.prompts)
+            for _ in range(self.rloo_k):
+                prompts.append(prompt)
+                seed = int(self.seed_rng.randint(0, 2**32 - 1))
+                seeds.append(seed)
         return prompts, seeds
 
     def _prepare_latents(self, seeds: Sequence[int], shape: Tuple[int, ...]) -> torch.Tensor:

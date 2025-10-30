@@ -2,9 +2,9 @@ run:
   output_root: exps
   run_name: sd15_rl_base
   seed: 0
-  timestamp: 20251030-150813
-  run_id: 20251030-150813-sd15_rl_base
-  run_dir: /work/nvme/betk/zli42/RLEPD/exps/20251030-150813-sd15_rl_base
+  timestamp: 20251030-172528
+  run_id: 20251030-172528-sd15_rl_base
+  run_dir: /work/nvme/betk/zli42/RLEPD/exps/20251030-172528-sd15_rl_base
 data:
   predictor_snapshot: exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl
   prompt_csv: null
@@ -22,7 +22,7 @@ reward:
   enable_amp: true
   cache_dir: weights
 ppo:
-  rollout_batch_size: 4
+  rollout_batch_size: 24
   rloo_k: 2
   ppo_epochs: 1
   minibatch_size: 2
@@ -32,7 +32,7 @@ ppo:
   entropy_coef: 0.0
   max_grad_norm: 1.0
   decode_rgb: true
-  steps: 2
+  steps: 4
   dirichlet_concentration: 200.0
 logging:
   log_interval: 1

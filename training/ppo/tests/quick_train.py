@@ -16,6 +16,9 @@ import argparse
 from pathlib import Path
 from typing import List, Optional
 
+import json
+import time
+
 import numpy as np
 import torch
 from PIL import Image
@@ -27,11 +30,7 @@ from training.ppo.config import (
     pretty_format_config,
     validate_config,
 )
-from training.ppo.launch import (
-    enrich_model_dimensions,
-    ensure_run_directory,
-    seed_everything,
-)
+from training.ppo.launch import enrich_model_dimensions, ensure_run_directory, save_config_snapshot, seed_everything
 from training.ppo.cold_start import build_dirichlet_params, load_predictor_table
 from training.ppo.policy import EPDParamPolicy
 from training.ppo.ppo_trainer import PPOTrainer, PPOTrainerConfig
@@ -96,8 +95,10 @@ def main(argv: Optional[List[str]] = None) -> None:
         return
 
     ensure_run_directory(full_config.run)
+    save_config_snapshot(full_config)
     out_samples = full_config.run.run_dir / "samples"
     out_samples.mkdir(parents=True, exist_ok=True)
+    metrics_path = full_config.run.run_dir / "logs" / "metrics.jsonl"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     seed_everything(full_config.run.seed)
@@ -192,36 +193,64 @@ def main(argv: Optional[List[str]] = None) -> None:
         img = np.clip(img, 0.0, 1.0)
         Image.fromarray((img * 255).astype(np.uint8)).save(out_samples / f"step0_image_{idx}.png")
 
-    for step in range(1, steps + 1):
-        captured_start = len(captured_batches)
-        metrics = trainer.train_step()
-        print(
-            f"[QuickTrain] Step {step}: reward_mean={metrics.get('reward_mean', 0):.4f} "
-            f"kl={metrics.get('kl', 0):.4f} policy_loss={metrics.get('policy_loss', 0):.4f}"
-        )
+    start_time = time.time()
+    with metrics_path.open("w", encoding="utf-8") as metrics_file:
+        for step in range(1, steps + 1):
+            captured_start = len(captured_batches)
+            metrics = trainer.train_step()
+            metrics_record = {
+                "step": step,
+                "reward_mean": float(metrics.get("reward_mean", float("nan"))),
+                "reward_std": float(metrics.get("reward_std", float("nan"))),
+                "kl": float(metrics.get("kl", float("nan"))),
+                "policy_loss": float(metrics.get("policy_loss", float("nan"))),
+                "entropy": float(metrics.get("entropy", float("nan"))),
+                "ratio": float(metrics.get("ratio", float("nan"))),
+                "elapsed_sec": float(time.time() - start_time),
+            }
+            print(json.dumps(metrics_record), file=metrics_file, flush=True)
 
-        if len(captured_batches) == captured_start:
-            continue
-        batch = captured_batches[captured_start]
-        images = trainer._prepare_images(batch).detach().cpu()
-        with torch.no_grad():
-            scores = reward.score_tensor(images.to(device), batch.prompts)
-            if isinstance(scores, tuple):
-                scores = scores[0]
-        scores = scores.detach().cpu().tolist()
+            print(
+                f"[QuickTrain] Step {step}: reward_mean={metrics_record['reward_mean']:.4f} "
+                f"kl={metrics_record['kl']:.4f} policy_loss={metrics_record['policy_loss']:.4f}"
+            )
 
-        for idx in range(images.shape[0]):
-            img = images[idx].permute(1, 2, 0).numpy()
-            img = np.clip(img, 0.0, 1.0)
-            score = scores[idx] if idx < len(scores) else float("nan")
-            prompt = batch.prompts[idx] if idx < len(batch.prompts) else f"prompt_{idx}"
-            Image.fromarray((img * 255).astype(np.uint8)).save(out_samples / f"step{step}_image_{idx}.png")
-            print(f"[QuickTrain] Saved step {step} image {idx} (score={score:.4f}) prompt=\"{prompt}\"")
-        # remove used batch to avoid growing list indefinitely
-        captured_batches[:] = captured_batches[:captured_start]
+            if len(captured_batches) == captured_start:
+                continue
+            batch = captured_batches[captured_start]
+            images = trainer._prepare_images(batch).detach().cpu()
+            with torch.no_grad():
+                scored = reward.score_tensor(images.to(device), batch.prompts, return_metadata=False)
+                if isinstance(scored, tuple):
+                    scores = scored[0]
+                else:
+                    scores = scored
+            scores = scores.detach().cpu().tolist()
+
+            for idx in range(images.shape[0]):
+                img = images[idx].permute(1, 2, 0).numpy()
+                img = np.clip(img, 0.0, 1.0)
+                score = scores[idx] if idx < len(scores) else float("nan")
+                prompt = batch.prompts[idx] if idx < len(batch.prompts) else f"prompt_{idx}"
+                Image.fromarray((img * 255).astype(np.uint8)).save(out_samples / f"step{step}_image_{idx}.png")
+                print(f"[QuickTrain] Saved step {step} image {idx} (score={score:.4f}) prompt=\"{prompt}\"")
+            captured_batches[:] = captured_batches[:captured_start]
 
     print(f"[QuickTrain] Images saved under {out_samples}")
 
 
 if __name__ == "__main__":  # pragma: no cover
     main()
+
+
+
+
+'''
+
+python -m training.ppo.tests.quick_train --steps 2          # 跑2个step
+python -m training.ppo.tests.quick_train --dry-run          # 看配置
+python -m training.ppo.tests.quick_train --steps 4 \
+       --override ppo.rollout_batch_size=24
+
+
+'''
