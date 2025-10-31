@@ -1,8 +1,11 @@
 import torch
+import numpy as np
 from solver_utils import *
 from torch.nn.parallel import DataParallel
 from concurrent.futures import ThreadPoolExecutor
 from torch_utils import distributed as dist
+from models.ldm.models.diffusion.ddim import DDIMSampler
+from models.ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters
 
 #----------------------------------------------------------------------------
 # Initialize the hook function to get the U-Net bottleneck outputs
@@ -593,3 +596,160 @@ def ipndm_sampler(
         return x_next, buffer_model, [], r_s, scale_dir_s, scale_time_s, weight_s
     
     return x_next, x_list
+
+
+#----------------------------------------------------------------------------
+
+def edm_sampler(
+    net,
+    latents,
+    class_labels=None,
+    condition=None,
+    unconditional_condition=None,
+    num_steps=18,
+    sigma_min=0.002,
+    sigma_max=80,
+    schedule_type=None,
+    schedule_rho=7,
+    afs=False,
+    denoise_to_zero=False,
+    return_inters=False,
+    S_churn=0.0,
+    S_min=0.0,
+    S_max=float("inf"),
+    S_noise=1.0,
+    guidance_rate=1.0,
+    **kwargs,
+):
+    device = latents.device
+    dtype = latents.dtype
+
+    sigma_min = max(sigma_min, getattr(net, "sigma_min", sigma_min))
+    sigma_max = min(sigma_max, getattr(net, "sigma_max", sigma_max))
+
+    step_indices = torch.arange(num_steps, dtype=torch.float64, device=device)
+    rho = schedule_rho
+    t_steps = (
+        sigma_max ** (1 / rho)
+        + step_indices / (num_steps - 1) * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
+    ) ** rho
+    t_steps = torch.cat([net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])])
+
+    x_next = latents.to(torch.float64) * t_steps[0]
+
+    for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
+        t_cur_val = float(t_cur)
+        t_next_val = float(t_next)
+
+        gamma = min(S_churn / num_steps, np.sqrt(2) - 1) if (S_min <= t_cur <= S_max) else 0
+        t_hat = net.round_sigma(t_cur + gamma * t_cur)
+        t_hat_val = float(t_hat)
+
+        noise = S_noise * torch.randn_like(x_next)
+        x_hat = x_next + (t_hat_val**2 - t_cur_val**2) ** 0.5 * noise
+
+        t_hat_tensor = torch.full(
+            (latents.shape[0], 1, 1, 1), t_hat_val, device=device, dtype=dtype
+        )
+        denoised = get_denoised(
+            net,
+            x_hat.to(dtype),
+            t_hat_tensor,
+            class_labels=class_labels,
+            condition=condition,
+            unconditional_condition=unconditional_condition,
+        ).to(torch.float64)
+
+        d_cur = (x_hat - denoised) / t_hat_val
+        x_next = x_hat + (t_next_val - t_hat_val) * d_cur
+
+        if i < num_steps - 1:
+            t_next_tensor = torch.full(
+                (latents.shape[0], 1, 1, 1), t_next_val, device=device, dtype=dtype
+            )
+            denoised_next = get_denoised(
+                net,
+                x_next.to(dtype),
+                t_next_tensor,
+                class_labels=class_labels,
+                condition=condition,
+                unconditional_condition=unconditional_condition,
+            ).to(torch.float64)
+            d_prime = (x_next - denoised_next) / t_next_val
+            x_next = x_hat + (t_next_val - t_hat_val) * (0.5 * d_cur + 0.5 * d_prime)
+
+    result = x_next.to(dtype)
+
+    if return_inters:
+        return result, []
+    return result, []
+
+
+#----------------------------------------------------------------------------
+
+def ddim_sampler(
+    net,
+    latents,
+    class_labels=None,
+    condition=None,
+    unconditional_condition=None,
+    num_steps=50,
+    sigma_min=None,
+    sigma_max=None,
+    schedule_type=None,
+    schedule_rho=None,
+    afs=False,
+    denoise_to_zero=False,
+    return_inters=False,
+    ddim_eta=0.0,
+    guidance_rate=1.0,
+    **kwargs,
+):
+    assert hasattr(net, "model")
+    assert condition is not None
+
+    sampler = DDIMSampler(net.model)
+    attempt_steps = int(num_steps)
+    while attempt_steps > 0:
+        try:
+            sampler.make_schedule(ddim_num_steps=attempt_steps, ddim_eta=ddim_eta, verbose=False)
+            break
+        except IndexError:
+            attempt_steps -= 1
+    if attempt_steps <= 0:
+        raise RuntimeError("Failed to construct DDIM schedule; choose smaller num_steps.")
+    if attempt_steps != num_steps:
+        dist.print0(f"[DDIM] Adjusted num_steps from {num_steps} to {attempt_steps} to match DDPM schedule.")
+        num_steps = attempt_steps
+
+    timesteps = np.array(sampler.ddim_timesteps, dtype=int)
+    max_idx = sampler.ddpm_num_timesteps - 1
+    if timesteps.max() > max_idx:
+        timesteps = np.clip(timesteps, 0, max_idx)
+        sampler.ddim_timesteps = timesteps
+        alphacums = sampler.alphas_cumprod.cpu().numpy()
+        sigmas, alphas, alphas_prev = make_ddim_sampling_parameters(alphacums, timesteps, ddim_eta, verbose=False)
+        device = sampler.betas.device
+        sampler.ddim_sigmas = torch.tensor(sigmas, device=device, dtype=torch.float32)
+        sampler.ddim_alphas = torch.tensor(alphas, device=device, dtype=torch.float32)
+        sampler.ddim_alphas_prev = torch.tensor(alphas_prev, device=device, dtype=torch.float32)
+        sampler.ddim_sqrt_one_minus_alphas = torch.tensor(np.sqrt(1.0 - alphas), device=device, dtype=torch.float32)
+
+    size = (
+        latents.shape[0],
+        net.model.channels,
+        net.model.image_size,
+        net.model.image_size,
+    )
+    samples, _ = sampler.ddim_sampling(
+        condition,
+        size,
+        x_T=latents,
+        ddim_use_original_steps=False,
+        unconditional_guidance_scale=guidance_rate,
+        unconditional_conditioning=unconditional_condition,
+    )
+    return samples, []
+
+
+#----------------------------------------------------------------------------

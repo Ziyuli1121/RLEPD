@@ -2,6 +2,7 @@ src/
 samples/
 HPSv2/
 weights/
+exps/
 __pycache__/
 */__pycache__/
 **/__pycache__/

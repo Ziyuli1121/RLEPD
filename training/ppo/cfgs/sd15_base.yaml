@@ -26,7 +26,7 @@ ppo:
   rollout_batch_size: 28
   rloo_k: 4
   ppo_epochs: 1
-  minibatch_size: 2
+  minibatch_size: 4
   learning_rate: 5.0e-5
   clip_range: 0.2
   kl_coef: 0.00

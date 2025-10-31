@@ -126,6 +126,7 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
 @click.option('--batch', 'max_batch_size', help='Maximum batch size', metavar='INT',                                type=click.IntRange(min=1), default=64, show_default=True)
 @click.option('--seeds',                   help='Random seeds (e.g. 1,2,5-10)', metavar='LIST',                     type=parse_int_list, default='0-63', show_default=True)
 @click.option('--prompt',                  help='Prompt for Stable Diffusion sampling', metavar='STR',              type=str)
+@click.option('--prompt-file',             help='Path to text/CSV file with prompts (one per line)', metavar='PATH', type=click.Path(exists=True, dir_okay=False))
 @click.option('--use_fp16',                help='Whether to use mixed precision', metavar='BOOL',                   type=bool, default=False)
 
 # Options for sampling
@@ -138,7 +139,7 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
 
 #----------------------------------------------------------------------------
 
-def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, device=torch.device('cuda'), **solver_kwargs):
+def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_file, device=torch.device('cuda'), **solver_kwargs):
 
     dist.init()
     num_batches = ((len(seeds) - 1) // (max_batch_size * dist.get_world_size()) + 1) * dist.get_world_size()
@@ -210,16 +211,25 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, device=to
     solver_kwargs['nfe'] = nfe
 
     # Load the prompts
-    if dataset_name in ['ms_coco'] and solver_kwargs['prompt'] is None:
+    sample_captions = None
+    if prompt_file and solver_kwargs['prompt'] is None:
+        with open(prompt_file, 'r', encoding='utf-8') as file:
+            lines = [line.strip() for line in file if line.strip()]
+        if not lines:
+            raise RuntimeError(f"No prompts found in '{prompt_file}'.")
+        sample_captions = lines
+    elif dataset_name in ['ms_coco'] and solver_kwargs['prompt'] is None:
         # Loading MS-COCO captions for FID-30k evaluaion
         # We use the selected 30k captions from https://github.com/boomb0om/text2image-benchmark
         prompt_path, _ = check_file_by_key('prompts')
         sample_captions = []
-        with open(prompt_path, 'r') as file:
+        with open(prompt_path, 'r', encoding='utf-8') as file:
             reader = csv.DictReader(file)
             for row in reader:
                 text = row['text']
                 sample_captions.append(text)
+        if not sample_captions:
+            raise RuntimeError(f"No prompts found in '{prompt_path}'.")
 
     # Construct solver
     sampler_fn = get_solver_fn(solver)
@@ -265,7 +275,15 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, device=to
                 class_labels = rnd.randint(net.label_dim, size=(batch_size,), device=device)
             elif solver_kwargs['model_source'] == 'ldm' and dataset_name == 'ms_coco':
                 if solver_kwargs['prompt'] is None:
-                    prompts = sample_captions[batch_seeds[0]:batch_seeds[-1]+1]
+                    if sample_captions is None:
+                        raise RuntimeError("Prompt list is empty; provide --prompt or --prompt-file.")
+                    start = int(batch_seeds[0])
+                    end = int(batch_seeds[-1])
+                    if end >= len(sample_captions):
+                        raise RuntimeError(
+                            f"Batch seed index {end} exceeds available prompts ({len(sample_captions)})."
+                        )
+                    prompts = sample_captions[start:end + 1]
                 else:
                     prompts = [solver_kwargs['prompt'] for i in range(batch_size)]
                 if solver_kwargs['guidance_rate'] != 1.0:

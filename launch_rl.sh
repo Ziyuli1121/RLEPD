@@ -8,16 +8,100 @@ python -m training.ppo.launch \
 
 # 2. 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
-    exps/<run-id> \
-    --checkpoint checkpoints/policy-step000500.pt
+    exps/20251030-235041-sd15_rl_base \
+    --checkpoint checkpoints/policy-step001700.pt
 
 # 3. 使用导出的 predictor 生成图像
+
+# 不写prompt file，默认是30k mscoco prompt
 python sample.py \
-    --predictor_path exps/<run-id>/export/network-snapshot-export-step000500.pkl \
-    --seeds 0-3 --batch 4 --prompt "a photo of a small corgi"
+    --predictor_path exps/20251030-235041-sd15_rl_base/export/network-snapshot-export-step001700.pkl \
+    --batch 1 --seeds "0-10" \
+    --outdir ./samples/rl_new
+
+# epd （distillation / RL）
+python sample.py \
+    --predictor_path exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-99" \
+    --batch 16 \
+    --outdir ./samples/test_distillation
+
+python sample_baseline.py --sampler ddim \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-99" --batch 16 \
+    --num-steps 18 --ddim-steps 18 --ddim-eta 0.0 \
+    --outdir ./samples/test_ddim_few
+
+python sample_baseline.py --sampler ddim \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-99" --batch 16 \
+    --num-steps 36 --ddim-steps 36 --ddim-eta 0.0 \
+    --outdir ./samples/test_ddim
+
+python sample_baseline.py --sampler edm \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-99" --batch 16 \
+    --num-steps 18 --edm-s-churn 0 --edm-s-noise 1 \
+    --outdir ./samples/test_edm
+
+python sample_baseline.py --sampler dpm \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-99" --batch 16 \
+    --num-steps 9 --inner-steps 2 --solver-r 0.5 \
+    --outdir ./samples/test_dpm
+
 
 # 4. 评估生成图像的 HPS 分数
 python -m training.ppo.scripts.score_hps \
-    --images exps/<run-id>/samples \
-    --prompts path/to/prompts.csv \
+    --images samples/test_rl \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
     --weights weights/HPS_v2.1_compressed.pt
+
+# 0.24169921875
+
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_distillation \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2410888671875
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_ddim \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.24365234375
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_ddim_few \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2403564453125
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_edm \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2427978515625
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_dpm \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2381591796875
