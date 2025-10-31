@@ -9,7 +9,7 @@ logging — works end to end before Stage 8 development.
 Example:
     python -m training.ppo.tests.quick_train \
         --config training/ppo/cfgs/sd15_base.yaml \
-        --steps 2
+        --steps 20
 """
 
 import argparse
@@ -30,7 +30,13 @@ from training.ppo.config import (
     pretty_format_config,
     validate_config,
 )
-from training.ppo.launch import enrich_model_dimensions, ensure_run_directory, save_config_snapshot, seed_everything
+from training.ppo.launch import (
+    enrich_model_dimensions,
+    ensure_run_directory,
+    save_config_snapshot,
+    seed_everything,
+    save_policy_checkpoint,
+)
 from training.ppo.cold_start import build_dirichlet_params, load_predictor_table
 from training.ppo.policy import EPDParamPolicy
 from training.ppo.ppo_trainer import PPOTrainer, PPOTrainerConfig
@@ -215,6 +221,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                 f"kl={metrics_record['kl']:.4f} policy_loss={metrics_record['policy_loss']:.4f}"
             )
 
+            if step % max(1, full_config.logging.save_interval) == 0 or step == steps:
+                ckpt_path = save_policy_checkpoint(full_config.run, trainer.policy, step)
+                print(f"[QuickTrain] Saved policy checkpoint to {ckpt_path}")
+
             if len(captured_batches) == captured_start:
                 continue
             batch = captured_batches[captured_start]
@@ -249,7 +259,7 @@ if __name__ == "__main__":  # pragma: no cover
 
 python -m training.ppo.tests.quick_train --steps 2          # 跑2个step
 python -m training.ppo.tests.quick_train --dry-run          # 看配置
-python -m training.ppo.tests.quick_train --steps 4 \
+python -m training.ppo.tests.quick_train --steps 40 \
        --override ppo.rollout_batch_size=24
 
 

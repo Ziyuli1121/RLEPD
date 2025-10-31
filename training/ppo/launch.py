@@ -66,6 +66,32 @@ def ensure_run_directory(run_config: cfg.RunConfig) -> None:
     (run_config.run_dir / "samples").mkdir(parents=True, exist_ok=True)
 
 
+def _policy_state_dict_cpu(policy: EPDParamPolicy) -> Dict[str, torch.Tensor]:
+    state_dict = policy.state_dict()
+    cpu_state = {}
+    for key, value in state_dict.items():
+        if torch.is_tensor(value):
+            cpu_state[key] = value.detach().cpu()
+        else:
+            cpu_state[key] = value
+    return cpu_state
+
+
+def save_policy_checkpoint(run_config: cfg.RunConfig, policy: EPDParamPolicy, step: int) -> Path:
+    """
+    Persist policy 权重到 checkpoints/policy-stepXXXXXX.pt。
+    """
+
+    if run_config.run_dir is None:
+        raise RuntimeError("run_dir is not assigned; call ensure_run_directory first.")
+    checkpoint_dir = run_config.run_dir / "checkpoints"
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    path = checkpoint_dir / f"policy-step{step:06d}.pt"
+    state_dict = _policy_state_dict_cpu(policy)
+    torch.save(state_dict, path)
+    return path
+
+
 def enrich_model_dimensions(full_config: cfg.FullConfig, dry_run: bool) -> Dict[str, int]:
     table = load_predictor_table(full_config.data.predictor_snapshot, map_location="cpu")
     if full_config.model.num_steps is not None and full_config.model.num_steps != table.num_steps:
@@ -218,6 +244,12 @@ def main(argv: Optional[List[str]] = None) -> None:
                     if k in metrics
                 )
                 print(f"[Step {step}] {summary}")
+            if (
+                full_config.logging.save_interval > 0
+                and step % full_config.logging.save_interval == 0
+            ) or step == full_config.ppo.steps:
+                ckpt_path = save_policy_checkpoint(full_config.run, trainer.policy, step)
+                print(f"[Step {step}] Saved policy checkpoint to {ckpt_path}")
 
     print(f"[Launch] Finished {full_config.ppo.steps} PPO steps. Results saved to {full_config.run.run_dir}")
 

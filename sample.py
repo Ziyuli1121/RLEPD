@@ -320,3 +320,18 @@ if __name__ == "__main__":
     main()
 
 #----------------------------------------------------------------------------
+
+
+'''
+
+MASTER_ADDR=127.0.0.1 MASTER_PORT=29610 python sample.py \
+    --predictor_path exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl \
+    --seeds 0-3 --batch 2 --seeds "0-10" \
+    --outdir ./samples/origin
+
+MASTER_ADDR=127.0.0.1 MASTER_PORT=29610 python sample.py \
+    --predictor_path exps/20251030-215325-sd15_rl_base/export/network-snapshot-export-step000040.pkl \
+    --seeds 0-3 --batch 2 --seeds "0-10" \
+    --outdir ./samples/rl
+
+'''

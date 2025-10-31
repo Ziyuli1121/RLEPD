@@ -94,7 +94,8 @@ Stage 7 introduces YAML-based configuration, CLI overrides, and standardized run
 
    - Outputs are written to `exps/<timestamp>-<run_name>/` with subfolders for configs, logs, checkpoints, and samples.  
    - Metrics are streamed to `logs/metrics.jsonl`; console summaries appear every `logging.log_interval` steps.  
-   - `ppo.steps` controls how many PPO iterations to run in this session.
+   - `ppo.steps` controls how many PPO iterations to run in this session。  
+   - 每到 `logging.save_interval`（以及最后一步）会自动在 `checkpoints/` 下保存 `policy-stepXXXXXX.pt`，用于 Stage 8 导出。
 
 3. **Configuration structure**
    - `run`: output root, run name, RNG seed.  
@@ -105,6 +106,40 @@ Stage 7 introduces YAML-based configuration, CLI overrides, and standardized run
    - `logging`: console/log frequencies.  
 
    See `training/ppo/cfgs/sd15_base.yaml` for the default template; additional overrides can be layered through `--override`.
+
+---
+
+Export & Replay (Stage 8)
+-------------------------
+
+Stage 8 将 PPO 策略的 Dirichlet 均值导出为标准 `EPD_predictor`，并通过 `sample.py` 回放验证。
+
+1. **执行导出**
+   ```bash
+   python -m training.ppo.export_epd_predictor exps/<timestamp>-<run_name>
+   python -m training.ppo.export_epd_predictor exps/<run> \
+       --checkpoint checkpoints/policy-step000050.pt --device cuda
+   ```
+   - 默认读取 `checkpoints/` 中步数最大的 `policy-stepXXXXXX.pt`。  
+   - 导出文件位于 `export/` 目录：  
+     * `network-snapshot-export-stepXXXXXX.pkl` — 可直接交给 `sample.py`；  
+     * `training_options-export-stepXXXXXX.json` — 与 EPD 原生选项结构对齐；  
+     * `export-manifest-stepXXXXXX.json` — 记录导出时间、checkpoint、最近一次训练指标等。  
+   - 若只想生成快照与选项，可加 `--no-manifest`。
+
+2. **回放验证**
+   ```bash
+   python sample.py --predictor_path exps/<run>/export/network-snapshot-export-step000050.pkl \
+       --prompt "a photo of a small corgi" --seeds 0-3 --batch 2
+   ```
+   - 输出图像可保存到 `--outdir`（默认沿用 sample.py 规则）。  
+   - 亦可将 `training_options-export-*.json` 某些字段复制到下游实验的配置中。
+
+3. **单元测试**
+   ```bash
+   python -m training.ppo.tests.test_export_predictor     # 验证导出逻辑
+   ```
+   测试会构造轻量级策略并检查生成的快照 / manifest / training_options。
 
 ---
 
