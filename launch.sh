@@ -67,6 +67,12 @@ ADDITIONAL_FLAGS="--max_order=2 --predict_x0=False --lower_order_final=True"
 GUIDANCE_FLAGS="--guidance_type=cfg --guidance_rate=7.5"
 train_model "ms_coco" 32 5
 
+SOLVER_FLAGS="--sampler_stu=epd --sampler_tea=dpm --num_steps=10 --M=3 --afs=False --scale_dir=0.00 --scale_time=0.0 --seed=0 --lr 0.01"
+SCHEDULE_FLAGS="--schedule_type=discrete --schedule_rho=1"
+ADDITIONAL_FLAGS="--max_order=2 --predict_x0=False --lower_order_final=True"
+GUIDANCE_FLAGS="--guidance_type=cfg --guidance_rate=7.5"
+train_model "ms_coco" 32 5
+
 
 #################################
 ### B. Generate Samples for FID ###

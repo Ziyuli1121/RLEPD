@@ -4,8 +4,6 @@ from solver_utils import *
 from torch.nn.parallel import DataParallel
 from concurrent.futures import ThreadPoolExecutor
 from torch_utils import distributed as dist
-from models.ldm.models.diffusion.ddim import DDIMSampler
-from models.ldm.modules.diffusionmodules.util import make_ddim_sampling_parameters
 
 #----------------------------------------------------------------------------
 # Initialize the hook function to get the U-Net bottleneck outputs
@@ -687,6 +685,7 @@ def edm_sampler(
 
 #----------------------------------------------------------------------------
 
+@torch.no_grad()
 def ddim_sampler(
     net,
     latents,
@@ -705,51 +704,61 @@ def ddim_sampler(
     guidance_rate=1.0,
     **kwargs,
 ):
-    assert hasattr(net, "model")
-    assert condition is not None
+    if num_steps is None:
+        raise ValueError("num_steps must be specified for the DDIM sampler.")
 
-    sampler = DDIMSampler(net.model)
-    attempt_steps = int(num_steps)
-    while attempt_steps > 0:
-        try:
-            sampler.make_schedule(ddim_num_steps=attempt_steps, ddim_eta=ddim_eta, verbose=False)
-            break
-        except IndexError:
-            attempt_steps -= 1
-    if attempt_steps <= 0:
-        raise RuntimeError("Failed to construct DDIM schedule; choose smaller num_steps.")
-    if attempt_steps != num_steps:
-        dist.print0(f"[DDIM] Adjusted num_steps from {num_steps} to {attempt_steps} to match DDPM schedule.")
-        num_steps = attempt_steps
+    if abs(float(ddim_eta)) > 0.0:
+        dist.print0("[DDIM] 忽略非零的 ddim_eta，当前实现使用确定性的 Euler-DDIM 更新。")
 
-    timesteps = np.array(sampler.ddim_timesteps, dtype=int)
-    max_idx = sampler.ddpm_num_timesteps - 1
-    if timesteps.max() > max_idx:
-        timesteps = np.clip(timesteps, 0, max_idx)
-        sampler.ddim_timesteps = timesteps
-        alphacums = sampler.alphas_cumprod.cpu().numpy()
-        sigmas, alphas, alphas_prev = make_ddim_sampling_parameters(alphacums, timesteps, ddim_eta, verbose=False)
-        device = sampler.betas.device
-        sampler.ddim_sigmas = torch.tensor(sigmas, device=device, dtype=torch.float32)
-        sampler.ddim_alphas = torch.tensor(alphas, device=device, dtype=torch.float32)
-        sampler.ddim_alphas_prev = torch.tensor(alphas_prev, device=device, dtype=torch.float32)
-        sampler.ddim_sqrt_one_minus_alphas = torch.tensor(np.sqrt(1.0 - alphas), device=device, dtype=torch.float32)
+    t_steps = get_schedule(
+        num_steps,
+        sigma_min,
+        sigma_max,
+        device=latents.device,
+        schedule_type=schedule_type,
+        schedule_rho=schedule_rho,
+        net=net,
+    ).to(latents.dtype)
 
-    size = (
-        latents.shape[0],
-        net.model.channels,
-        net.model.image_size,
-        net.model.image_size,
-    )
-    samples, _ = sampler.ddim_sampling(
-        condition,
-        size,
-        x_T=latents,
-        ddim_use_original_steps=False,
-        unconditional_guidance_scale=guidance_rate,
-        unconditional_conditioning=unconditional_condition,
-    )
-    return samples, []
+    x_next = latents * t_steps[0]
+    trajectory = [x_next.unsqueeze(0)] if return_inters else None
+
+    for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
+        x_cur = x_next
+        use_afs = afs and i == 0
+        if use_afs:
+            d_cur = x_cur / (1 + t_cur**2).sqrt()
+        else:
+            denoised = get_denoised(
+                net,
+                x_cur,
+                t_cur,
+                class_labels=class_labels,
+                condition=condition,
+                unconditional_condition=unconditional_condition,
+            )
+            d_cur = (x_cur - denoised) / t_cur
+        x_next = x_cur + (t_next - t_cur) * d_cur
+
+        if return_inters:
+            trajectory.append(x_next.unsqueeze(0))
+
+    if denoise_to_zero:
+        t_final = t_steps[-1]
+        x_next = get_denoised(
+            net,
+            x_next,
+            t_final,
+            class_labels=class_labels,
+            condition=condition,
+            unconditional_condition=unconditional_condition,
+        )
+        if return_inters:
+            trajectory.append(x_next.unsqueeze(0))
+
+    if return_inters:
+        return torch.cat(trajectory, dim=0).to(latents.device)
+    return x_next, trajectory
 
 
 #----------------------------------------------------------------------------

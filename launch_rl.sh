@@ -9,7 +9,7 @@ python -m training.ppo.launch \
 # 2. 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
     exps/20251030-235041-sd15_rl_base \
-    --checkpoint checkpoints/policy-step001700.pt
+    --checkpoint checkpoints/policy-step005000.pt
 
 # 3. 使用导出的 predictor 生成图像
 
@@ -21,25 +21,25 @@ python sample.py \
 
 # epd （distillation / RL）
 python sample.py \
-    --predictor_path exps/00036-ms_coco-10-36-epd-dpm-1-discrete/network-snapshot-000005.pkl \
+    --predictor_path exps/20251030-235041-sd15_rl_base/export/network-snapshot-export-step005000.pkl \
     --prompt-file src/prompts/test.txt \
     --seeds "0-99" \
     --batch 16 \
-    --outdir ./samples/test_distillation
-
-python sample_baseline.py --sampler ddim \
-    --dataset-name ms_coco \
-    --prompt-file src/prompts/test.txt \
-    --seeds "0-99" --batch 16 \
-    --num-steps 18 --ddim-steps 18 --ddim-eta 0.0 \
-    --outdir ./samples/test_ddim_few
+    --outdir ./samples/test_rl_5000
 
 python sample_baseline.py --sampler ddim \
     --dataset-name ms_coco \
     --prompt-file src/prompts/test.txt \
     --seeds "0-99" --batch 16 \
     --num-steps 36 --ddim-steps 36 --ddim-eta 0.0 \
-    --outdir ./samples/test_ddim
+    --outdir ./samples/test_ddim_newddim_36
+
+python sample_baseline.py --sampler ddim \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-999" --batch 16 \
+    --num-steps 51 --ddim-steps 51 --ddim-eta 0.0 \
+    --outdir ./samples/test_ddim_51
 
 python sample_baseline.py --sampler edm \
     --dataset-name ms_coco \
@@ -55,6 +55,12 @@ python sample_baseline.py --sampler dpm \
     --num-steps 9 --inner-steps 2 --solver-r 0.5 \
     --outdir ./samples/test_dpm
 
+python sample_baseline.py --sampler ipndm \
+    --dataset-name ms_coco \
+    --prompt-file src/prompts/test.txt \
+    --seeds 0-99 --batch 16 \
+    --num-steps 36 --max-order 3 \
+    --outdir ./samples/test_ipndm
 
 # 4. 评估生成图像的 HPS 分数
 python -m training.ppo.scripts.score_hps \
@@ -105,3 +111,35 @@ python -m training.ppo.scripts.score_hps \
     --weights weights/HPS_v2.1_compressed.pt
 
 # 0.2381591796875
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_rl_2800 \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2420654296875
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_ddim_51 \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.2464599609375
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_rl_5000 \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 0.243408203125
+
+python -m training.ppo.scripts.score_hps \
+    --images samples/test_ddim_newddim_36 \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test100.txt \
+    --weights weights/HPS_v2.1_compressed.pt
+
+# 
