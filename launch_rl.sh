@@ -142,4 +142,4 @@ python -m training.ppo.scripts.score_hps \
     --prompts src/prompts/test100.txt \
     --weights weights/HPS_v2.1_compressed.pt
 
-# 
+# 0.24267578125
