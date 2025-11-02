@@ -240,7 +240,7 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_fi
             continue
         elif key == 'predictor':
             continue
-        elif key == 'max_order' and solver in ['euler', 'dpm']:
+        elif key == 'max_order' and solver in ['euler', 'dpm', 'dpm2']:
             continue
         elif key in ['predict_x0', 'lower_order_final'] and solver not in ['dpmpp']:
             continue

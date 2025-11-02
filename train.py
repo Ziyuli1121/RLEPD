@@ -22,7 +22,7 @@ warnings.filterwarnings('ignore', 'Grad strides do not match bucket view strides
 # Options for solvers
 @click.option('--num_steps',        help='Number of time steps for training', metavar='INT',           type=click.IntRange(min=1), default=4, show_default=True)
 @click.option('--sampler_stu',      help='Student solver', metavar='STR',                              type=click.Choice(['epd','amed', 'dpm', 'dpmpp', 'euler', 'ipndm']), default='epd', show_default=True)
-@click.option('--sampler_tea',      help='Teacher solver', metavar='STR',                              type=click.Choice(['heun', 'dpm', 'dpmpp', 'euler', 'ipndm']), default='heun', show_default=True)
+@click.option('--sampler_tea',      help='Teacher solver', metavar='STR',                              type=click.Choice(['heun', 'dpm', 'dpm2', 'dpmpp', 'euler', 'ipndm']), default='heun', show_default=True)
 @click.option('--M',                help='Steps to insert between two adjacent steps', metavar='INT',  type=click.IntRange(min=1), default=1, show_default=True)
 @click.option('--guidance_type',    help='Guidance type',                                              type=click.Choice(['cg', 'cfg', 'uncond', None]), default=None, show_default=True)
 @click.option('--guidance_rate',    help='Guidance rate', metavar='FLOAT',                             type=float, default=0.)

@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/test_rl_5450_nfe18",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 0.24609375,
+    "std": 0.0400390625,
+    "min": 0.12078857421875,
+    "max": 0.34423828125
+  },
+  "metadata": {
+    "duration": 8.299565076828003,
+    "num_images": 1000,
+    "batch_size": 8,
+    "device": "cuda"
+  }
+}

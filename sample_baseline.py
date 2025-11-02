@@ -156,7 +156,7 @@ def load_ldm_model(config, ckpt, verbose=False):
 @click.command()
 @click.option(
     "--sampler",
-    type=click.Choice(["dpm", "heun", "ipndm", "edm", "ddim"], case_sensitive=False),
+    type=click.Choice(["dpm", "dpm2", "heun", "ipndm", "edm", "ddim"], case_sensitive=False),
     required=True,
     help="Name of the teacher sampler.",
 )

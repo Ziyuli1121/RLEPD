@@ -9,7 +9,7 @@ python -m training.ppo.launch \
 # 2. 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
     exps/20251030-235041-sd15_rl_base \
-    --checkpoint checkpoints/policy-step005000.pt
+    --checkpoint checkpoints/policy-step005450.pt
 
 # 3. 使用导出的 predictor 生成图像
 
@@ -61,6 +61,8 @@ python sample_baseline.py --sampler ipndm \
     --seeds 0-99 --batch 16 \
     --num-steps 36 --max-order 3 \
     --outdir ./samples/test_ipndm
+
+
 
 # 4. 评估生成图像的 HPS 分数
 python -m training.ppo.scripts.score_hps \

@@ -35,7 +35,7 @@ seeds = utils.parse_int_list('0-63')            # One seed for one image
 # Sampling options
 solver_kwargs['dataset_name'] = 'cifar10'       # Name of the dataset, one in ['cifar10', 'ffhq', 'afhqv2', 'imagenet64', 'lsun_bedroom', 'imagenet256', 'lsun_bedroom_ldm', 'ffhq_ldm', 'ms_coco']
 solver_kwargs['max_batch_size'] = 64            # Maximum batch size
-solver_kwargs['solver'] = 'euler'               # Name of the Solver, one in ['euler', 'heun', 'dpm', 'dpmpp', 'unipc', 'deis', 'ipndm', 'ipndm_v']
+solver_kwargs['solver'] = 'euler'               # Name of the Solver, one in ['euler', 'heun', 'dpm', 'dpm2', 'dpmpp', 'unipc', 'deis', 'ipndm', 'ipndm_v']
 solver_kwargs['num_steps'] = 21                 # Number of timestamps. When num_steps=N, there will be N-1 sampling steps.
 solver_kwargs['afs'] = False                    # Whether to use AFS which saves the first model evaluation
 solver_kwargs['denoise_to_zero'] = False        # Whether to denoise from the last timestamp (>0) to 0.

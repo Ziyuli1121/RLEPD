@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/test_ipndm_nfe50",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 0.24755859375,
+    "std": 0.041351318359375,
+    "min": 0.12188720703125,
+    "max": 0.3427734375
+  },
+  "metadata": {
+    "duration": 9.124452829360962,
+    "num_images": 1000,
+    "batch_size": 8,
+    "device": "cuda"
+  }
+}
