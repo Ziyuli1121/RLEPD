@@ -1,11 +1,6 @@
 RLEPD — PPO Fine-Tuning for EPD Predictor Tables
 ================================================
 
-RLEPD fuses two ideas:
-
-1. **EPD (Ensemble Parallel Directions)** &mdash; distilled predictor tables that accelerate diffusion sampling.
-2. **TPDM** &mdash; a PPO + RLOO reinforcement-learning framework that optimizes diffusion policies using human preference rewards (HPS).
-
-The objective is to optimize EPD predictor tables directly via RL so that downstream image quality (measured by HPSv2.1, FID, etc.) surpasses the distilled baseline. All RL-specific components live under `training/ppo/`, leaving the original EPD code untouched.
+RLEPD couples RL with the EPD solver’s parameter-table learning: in `training/ppo/policy.py` a PPO policy outputs per-step Dirichlet concentrations for position segments (`alpha_pos`) and gradient weights (`alpha_weight`) to shape intermediate locations and weights; `training/ppo/cold_start.py` provides a baseline table, and the policy learns residuals in log-concentration space to match the baseline at init while enabling stable refinement; training is orchestrated by `training/ppo/ppo_trainer.py` and `training/ppo/rl_runner.py`, with rewards from `training/ppo/reward_hps.py` (HPS) or external scorers under `reward_models/` and `scripts/score_*.py`; configs and launches use `training/ppo/cfgs/*.yaml`, `launch_rl.sh`, and `launch_baseline.sh`, and `export_epd_predictor.py` exports the learned table for inference. The aim is to adapt EPD’s intermediate sampling across steps to boost stability and generative quality at fixed NFE.
 
 ---
