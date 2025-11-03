@@ -3,6 +3,7 @@ samples/
 HPSv2/
 weights/
 exps/
+results/
 __pycache__/
 */__pycache__/
 **/__pycache__/
