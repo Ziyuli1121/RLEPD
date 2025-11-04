@@ -20,10 +20,18 @@ python fake_train.py \
 python -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_base.yaml
 
+torchrun --nproc_per_node=1 -m training.ppo.launch \
+    --config training/ppo/cfgs/sd15_base.yaml
+
+#####################################################################################################
+torchrun --nproc_per_node=8 -m training.ppo.launch \
+    --config training/ppo/cfgs/sd15_parallel.yaml
+#####################################################################################################
+
 # 2. 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
-    exps/20251030-235041-sd15_rl_base \
-    --checkpoint checkpoints/policy-step005450.pt
+    exps/20251104-013538-sd15_rl_base \
+    --checkpoint checkpoints/policy-step000050.pt
 
 # 3. 使用导出的 predictor 生成图像
 
@@ -34,12 +42,12 @@ python sample.py \
     --outdir ./samples/rl_new
 
 # epd （distillation / RL）
-python sample.py \
-    --predictor_path exps/20251030-235041-sd15_rl_base/export/network-snapshot-export-step005000.pkl \
+MASTER_PORT=29600 python sample.py \
+    --predictor_path exps/20251104-013538-sd15_rl_base/export/network-snapshot-export-step000050.pkl \
     --prompt-file src/prompts/test.txt \
     --seeds "0-99" \
     --batch 16 \
-    --outdir ./samples/test_rl_5000
+    --outdir ./samples/nnnnnnn
 
 
 # 4. 评估生成图像的 HPS 分数

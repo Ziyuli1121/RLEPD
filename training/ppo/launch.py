@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel
 
 from . import config as cfg
 from .cold_start import build_dirichlet_params, load_predictor_table
@@ -44,12 +48,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def seed_everything(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+def seed_everything(seed: int, rank_offset: int = 0) -> None:
+    full_seed = seed + rank_offset
+    random.seed(full_seed)
+    np.random.seed(full_seed)
+    torch.manual_seed(full_seed)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+        torch.cuda.manual_seed_all(full_seed)
 
 
 def ensure_run_directory(run_config: cfg.RunConfig) -> None:
@@ -66,8 +71,14 @@ def ensure_run_directory(run_config: cfg.RunConfig) -> None:
     (run_config.run_dir / "samples").mkdir(parents=True, exist_ok=True)
 
 
-def _policy_state_dict_cpu(policy: EPDParamPolicy) -> Dict[str, torch.Tensor]:
-    state_dict = policy.state_dict()
+def _unwrap_policy(policy: EPDParamPolicy | DistributedDataParallel) -> EPDParamPolicy:
+    if isinstance(policy, DistributedDataParallel):
+        return policy.module  # type: ignore[return-value]
+    return policy
+
+
+def _policy_state_dict_cpu(policy: EPDParamPolicy | DistributedDataParallel) -> Dict[str, torch.Tensor]:
+    state_dict = _unwrap_policy(policy).state_dict()
     cpu_state = {}
     for key, value in state_dict.items():
         if torch.is_tensor(value):
@@ -77,7 +88,11 @@ def _policy_state_dict_cpu(policy: EPDParamPolicy) -> Dict[str, torch.Tensor]:
     return cpu_state
 
 
-def save_policy_checkpoint(run_config: cfg.RunConfig, policy: EPDParamPolicy, step: int) -> Path:
+def save_policy_checkpoint(
+    run_config: cfg.RunConfig,
+    policy: EPDParamPolicy | DistributedDataParallel,
+    step: int,
+) -> Path:
     """
     Persist policy 权重到 checkpoints/policy-stepXXXXXX.pt。
     """
@@ -90,6 +105,45 @@ def save_policy_checkpoint(run_config: cfg.RunConfig, policy: EPDParamPolicy, st
     state_dict = _policy_state_dict_cpu(policy)
     torch.save(state_dict, path)
     return path
+
+
+def _distributed_available() -> bool:
+    return dist.is_available() and dist.is_initialized()
+
+
+def setup_distributed() -> Tuple[bool, int, int, int]:
+    if not dist.is_available():
+        return False, 0, 1, 0
+
+    env_rank = os.environ.get("RANK")
+    env_world_size = os.environ.get("WORLD_SIZE")
+    if env_rank is None or env_world_size is None:
+        return False, 0, 1, 0
+
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
+    dist.init_process_group(backend=backend, init_method="env://")
+    rank = dist.get_rank()
+    world_size = dist.get_world_size()
+    local_rank = int(os.environ.get("LOCAL_RANK", rank))
+    if torch.cuda.is_available():
+        torch.cuda.set_device(local_rank)
+    return True, rank, world_size, local_rank
+
+
+def cleanup_distributed() -> None:
+    if _distributed_available():
+        dist.destroy_process_group()
+
+
+def reduce_metrics(metrics: Dict[str, float], world_size: int, device: torch.device) -> Dict[str, float]:
+    if not _distributed_available() or world_size == 1:
+        return {k: float(v) for k, v in metrics.items()}
+
+    keys = sorted(metrics.keys())
+    tensor = torch.tensor([float(metrics[k]) for k in keys], device=device, dtype=torch.float64)
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    tensor /= float(world_size)
+    return {key: float(value) for key, value in zip(keys, tensor.tolist())}
 
 
 def enrich_model_dimensions(full_config: cfg.FullConfig, dry_run: bool) -> Dict[str, int]:
@@ -142,116 +196,170 @@ def main(argv: Optional[List[str]] = None) -> None:
         print(json.dumps(meta, indent=2))
         return
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    ensure_run_directory(full_config.run)
-    save_config_snapshot(full_config)
-    seed_everything(full_config.run.seed)
+    distributed, rank, world_size, local_rank = setup_distributed()
+    is_master = rank == 0
 
-    print(f"[Launch] run_dir={full_config.run.run_dir}")
-    print(f"[Launch] Using device: {device}")
-    print("[Launch] Loading predictor snapshot...")
-    predictor_table = load_predictor_table(full_config.data.predictor_snapshot, map_location="cpu")
-    dirichlet_init = build_dirichlet_params(
-        predictor_table,
-        concentration=full_config.ppo.dirichlet_concentration,
-    )
-    policy = EPDParamPolicy(
-        num_steps=predictor_table.num_steps,
-        num_points=predictor_table.num_points,
-        hidden_dim=128,
-        num_layers=2,
-        dirichlet_init=dirichlet_init,
-    ).to(device)
+    if torch.cuda.is_available():
+        device = torch.device(f"cuda:{local_rank}" if distributed else "cuda")
+    else:
+        device = torch.device("cpu")
 
-    print("[Launch] Loading Stable Diffusion model...")
-    from sample import create_model  # Local import to avoid overhead on dry run
+    try:
+        if is_master:
+            ensure_run_directory(full_config.run)
+            save_config_snapshot(full_config)
+        if distributed:
+            dist.barrier()
+            run_dir_holder = [str(full_config.run.run_dir) if full_config.run.run_dir else ""]
+            dist.broadcast_object_list(run_dir_holder, src=0)
+            if not is_master:
+                full_config.run.run_dir = Path(run_dir_holder[0])
 
-    net, model_source = create_model(
-        dataset_name=full_config.model.dataset_name,
-        guidance_type=full_config.model.guidance_type,
-        guidance_rate=full_config.model.guidance_rate,
-        device=device,
-    )
-    net = net.to(device)
-    net.eval()
+        seed_everything(full_config.run.seed, rank_offset=rank)
 
-    reward = RewardHPS(
-        RewardHPSConfig(
-            device=device,
-            batch_size=full_config.reward.batch_size,
-            enable_amp=full_config.reward.enable_amp,
-            weights_path=full_config.reward.weights_path,
-            cache_dir=full_config.reward.cache_dir,
+        if is_master:
+            print(f"[Launch] run_dir={full_config.run.run_dir}")
+            print(f"[Launch] World size: {world_size}")
+        print(f"[Launch][Rank {rank}] Using device: {device}")
+        if distributed:
+            dist.barrier()
+
+        if is_master:
+            print("[Launch] Loading predictor snapshot...")
+        predictor_table = load_predictor_table(full_config.data.predictor_snapshot, map_location="cpu")
+        dirichlet_init = build_dirichlet_params(
+            predictor_table,
+            concentration=full_config.ppo.dirichlet_concentration,
         )
-    )
+        policy = EPDParamPolicy(
+            num_steps=predictor_table.num_steps,
+            num_points=predictor_table.num_points,
+            hidden_dim=128,
+            num_layers=2,
+            dirichlet_init=dirichlet_init,
+        ).to(device)
 
-    runner_config = RLRunnerConfig(
-        policy=policy,
-        net=net,
-        num_steps=predictor_table.num_steps,
-        num_points=predictor_table.num_points,
-        device=device,
-        guidance_type=full_config.model.guidance_type,
-        guidance_rate=full_config.model.guidance_rate,
-        schedule_type=full_config.model.schedule_type,
-        schedule_rho=full_config.model.schedule_rho,
-        dataset_name=full_config.model.dataset_name,
-        precision=torch.float32,
-        prompt_csv=full_config.data.prompt_csv,
-        rloo_k=full_config.ppo.rloo_k,
-        rng_seed=full_config.run.seed,
-        verbose=False,
-        model_source=model_source,
-    )
-    runner = EPDRolloutRunner(runner_config)
-
-    trainer_config = PPOTrainerConfig(
-        device=device,
-        rollout_batch_size=full_config.ppo.rollout_batch_size,
-        rloo_k=full_config.ppo.rloo_k,
-        ppo_epochs=full_config.ppo.ppo_epochs,
-        minibatch_size=full_config.ppo.minibatch_size,
-        learning_rate=full_config.ppo.learning_rate,
-        betas=(0.9, 0.999),
-        eps=1e-8,
-        weight_decay=0.0,
-        clip_range=full_config.ppo.clip_range,
-        kl_coef=full_config.ppo.kl_coef,
-        entropy_coef=full_config.ppo.entropy_coef,
-        normalize_advantages=True,
-        max_grad_norm=full_config.ppo.max_grad_norm,
-        decode_rgb=full_config.ppo.decode_rgb,
-        image_value_range=(0.0, 1.0),
-    )
-    trainer = PPOTrainer(policy, runner, reward, trainer_config)
-
-    metrics_path = full_config.run.run_dir / "logs" / "metrics.jsonl"
-    print(f"[Launch] Writing metrics to {metrics_path}")
-
-    start_time = time.time()
-    step = 0
-    with metrics_path.open("w", encoding="utf-8") as metrics_file:
-        while step < full_config.ppo.steps:
-            step += 1
-            metrics = trainer.train_step()
-            metrics["step"] = step
-            metrics["elapsed_sec"] = time.time() - start_time
-            print(json.dumps(metrics), file=metrics_file, flush=True)
-            if step % full_config.logging.log_interval == 0:
-                summary = ", ".join(
-                    f"{k}={metrics[k]:.4f}"
-                    for k in ("reward_mean", "kl", "policy_loss", "entropy")
-                    if k in metrics
+        if distributed:
+            ddp_kwargs: Dict[str, object] = {}
+            if device.type == "cuda":
+                ddp_kwargs.update(
+                    device_ids=[device.index],
+                    output_device=device.index,
                 )
-                print(f"[Step {step}] {summary}")
-            if (
-                full_config.logging.save_interval > 0
-                and step % full_config.logging.save_interval == 0
-            ) or step == full_config.ppo.steps:
-                ckpt_path = save_policy_checkpoint(full_config.run, trainer.policy, step)
-                print(f"[Step {step}] Saved policy checkpoint to {ckpt_path}")
+            policy = DistributedDataParallel(policy, **ddp_kwargs)
 
-    print(f"[Launch] Finished {full_config.ppo.steps} PPO steps. Results saved to {full_config.run.run_dir}")
+        if is_master:
+            print("[Launch] Loading Stable Diffusion model...")
+        from sample import create_model  # Local import to avoid overhead on dry run
+
+        net, model_source = create_model(
+            dataset_name=full_config.model.dataset_name,
+            guidance_type=full_config.model.guidance_type,
+            guidance_rate=full_config.model.guidance_rate,
+            device=device,
+        )
+        net = net.to(device)
+        net.eval()
+
+        reward = RewardHPS(
+            RewardHPSConfig(
+                device=device,
+                batch_size=full_config.reward.batch_size,
+                enable_amp=full_config.reward.enable_amp,
+                weights_path=full_config.reward.weights_path,
+                cache_dir=full_config.reward.cache_dir,
+            )
+        )
+
+        rollout_batch_size = full_config.ppo.rollout_batch_size
+        if rollout_batch_size % world_size != 0:
+            raise RuntimeError(
+                f"rollout_batch_size ({rollout_batch_size}) must be divisible by world_size ({world_size})."
+            )
+        per_rank_rollout = rollout_batch_size // world_size
+
+        runner_config = RLRunnerConfig(
+            policy=policy,
+            net=net,
+            num_steps=predictor_table.num_steps,
+            num_points=predictor_table.num_points,
+            device=device,
+            guidance_type=full_config.model.guidance_type,
+            guidance_rate=full_config.model.guidance_rate,
+            schedule_type=full_config.model.schedule_type,
+            schedule_rho=full_config.model.schedule_rho,
+            dataset_name=full_config.model.dataset_name,
+            precision=torch.float32,
+            prompt_csv=full_config.data.prompt_csv,
+            rloo_k=full_config.ppo.rloo_k,
+            rng_seed=full_config.run.seed + rank,
+            rank=rank,
+            world_size=world_size,
+            verbose=False,
+            model_source=model_source,
+        )
+        runner = EPDRolloutRunner(runner_config)
+
+        trainer_config = PPOTrainerConfig(
+            device=device,
+            rollout_batch_size=per_rank_rollout,
+            rloo_k=full_config.ppo.rloo_k,
+            ppo_epochs=full_config.ppo.ppo_epochs,
+            minibatch_size=full_config.ppo.minibatch_size,
+            learning_rate=full_config.ppo.learning_rate,
+            betas=(0.9, 0.999),
+            eps=1e-8,
+            weight_decay=0.0,
+            clip_range=full_config.ppo.clip_range,
+            kl_coef=full_config.ppo.kl_coef,
+            entropy_coef=full_config.ppo.entropy_coef,
+            normalize_advantages=True,
+            max_grad_norm=full_config.ppo.max_grad_norm,
+            decode_rgb=full_config.ppo.decode_rgb,
+            image_value_range=(0.0, 1.0),
+        )
+        trainer = PPOTrainer(policy, runner, reward, trainer_config)
+
+        metrics_path = full_config.run.run_dir / "logs" / "metrics.jsonl"
+        if is_master:
+            print(f"[Launch] Writing metrics to {metrics_path}")
+
+        start_time = time.time()
+        step = 0
+        metrics_file_ctx = metrics_path.open("w", encoding="utf-8") if is_master else nullcontext()
+        with metrics_file_ctx as metrics_file:
+            while step < full_config.ppo.steps:
+                step += 1
+                step_metrics = trainer.train_step()
+                reduced_metrics = reduce_metrics(step_metrics, world_size, device)
+                reduced_metrics["step"] = step
+                if is_master and metrics_file is not None:
+                    reduced_metrics["elapsed_sec"] = time.time() - start_time
+                    print(json.dumps(reduced_metrics), file=metrics_file, flush=True)
+                    if step % full_config.logging.log_interval == 0:
+                        summary = ", ".join(
+                            f"{k}={reduced_metrics[k]:.4f}"
+                            for k in ("reward_mean", "kl", "policy_loss", "entropy")
+                            if k in reduced_metrics
+                        )
+                        print(f"[Step {step}] {summary}")
+                if (
+                    full_config.logging.save_interval > 0
+                    and step % full_config.logging.save_interval == 0
+                    and is_master
+                ) or (step == full_config.ppo.steps and is_master):
+                    ckpt_path = save_policy_checkpoint(full_config.run, trainer.policy, step)
+                    print(f"[Step {step}] Saved policy checkpoint to {ckpt_path}")
+
+        if distributed:
+            dist.barrier()
+
+        if is_master:
+            print(
+                f"[Launch] Finished {full_config.ppo.steps} PPO steps. Results saved to {full_config.run.run_dir}"
+            )
+    finally:
+        cleanup_distributed()
 
 
 if __name__ == "__main__":  # pragma: no cover

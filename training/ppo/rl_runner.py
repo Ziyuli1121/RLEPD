@@ -54,6 +54,8 @@ class RLRunnerConfig(object):
         rng_seed=None,
         verbose=False,
         model_source="ldm",
+        rank=0,
+        world_size=1,
     ):
         self.policy = policy
         self.net = net
@@ -71,6 +73,8 @@ class RLRunnerConfig(object):
         self.rng_seed = rng_seed
         self.verbose = verbose
         self.model_source = model_source
+        self.rank = rank
+        self.world_size = max(1, world_size)
 
 
 class RolloutBatch(object):
@@ -242,11 +246,16 @@ class EPDRolloutRunner:
     def __init__(self, config: RLRunnerConfig):
         self.config = config
         self.policy = config.policy
+        self._policy_module = (
+            config.policy.module if hasattr(config.policy, "module") else config.policy
+        )
         self.net = config.net
         self.device = config.device
+        self.rank = getattr(config, "rank", 0)
+        self.world_size = getattr(config, "world_size", 1)
 
         self.prompts = _load_prompts(config.prompt_csv)
-        self.prompt_cursor = 0
+        self.prompt_cursor = self.rank % len(self.prompts)
         self.rloo_k = max(1, config.rloo_k)
 
         seed_value = config.rng_seed if config.rng_seed is not None else int(time.time())
@@ -265,13 +274,15 @@ class EPDRolloutRunner:
         prompts: List[str] = []
         seeds: List[int] = []
         unique_prompts = batch_size // self.rloo_k
-        for _ in range(unique_prompts):
-            prompt = self.prompts[self.prompt_cursor]
-            self.prompt_cursor = (self.prompt_cursor + 1) % len(self.prompts)
+        start_index = self.prompt_cursor
+        for idx in range(unique_prompts):
+            prompt_index = (start_index + idx * self.world_size) % len(self.prompts)
+            prompt = self.prompts[prompt_index]
             for _ in range(self.rloo_k):
                 prompts.append(prompt)
                 seed = int(self.seed_rng.randint(0, 2**32 - 1))
                 seeds.append(seed)
+        self.prompt_cursor = (start_index + unique_prompts * self.world_size) % len(self.prompts)
         return prompts, seeds
 
     def _prepare_latents(self, seeds: Sequence[int], shape: Tuple[int, ...]) -> torch.Tensor:
@@ -298,7 +309,7 @@ class EPDRolloutRunner:
             log_alpha_weight=policy_output.log_alpha_weight.reshape(-1, self.config.num_points),
         )
 
-        sample = self.policy.sample_table(flattened_output)
+        sample = self._policy_module.sample_table(flattened_output)
         intervals = self.config.num_steps - 1
         sample.positions = sample.positions.reshape(batch_size, intervals, self.config.num_points)
         sample.weights = sample.weights.reshape(batch_size, intervals, self.config.num_points)

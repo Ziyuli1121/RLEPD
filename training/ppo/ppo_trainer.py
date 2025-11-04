@@ -15,6 +15,7 @@ from typing import Dict, Optional, Tuple
 import torch
 from torch.optim import AdamW, Optimizer
 from types import SimpleNamespace
+from torch.nn.parallel import DistributedDataParallel
 
 from .policy import EPDParamPolicy
 from .rl_runner import EPDRolloutRunner, RolloutBatch
@@ -60,14 +61,19 @@ class PPOTrainer:
 
     def __init__(
         self,
-        policy: EPDParamPolicy,
+        policy: EPDParamPolicy | DistributedDataParallel,
         runner: EPDRolloutRunner,
         reward: RewardHPS,
         config: PPOTrainerConfig,
         optimizer: Optional[Optimizer] = None,
         scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
     ) -> None:
-        self.policy = policy.to(config.device)
+        if isinstance(policy, DistributedDataParallel):
+            self.policy = policy
+            self._policy_module = policy.module
+        else:
+            self.policy = policy.to(config.device)
+            self._policy_module = self.policy
         self.runner = runner
         self.reward = reward
         self.config = config
@@ -167,8 +173,12 @@ class PPOTrainer:
         batch_size = old_log_prob.shape[0]
         intervals = segments.shape[1]
 
-        base_alpha_pos = torch.exp(self.policy.base_log_alpha_pos.index_select(0, step_indices))
-        base_alpha_weight = torch.exp(self.policy.base_log_alpha_weight.index_select(0, step_indices))
+        base_alpha_pos = torch.exp(
+            self._policy_module.base_log_alpha_pos.index_select(0, step_indices)
+        )
+        base_alpha_weight = torch.exp(
+            self._policy_module.base_log_alpha_weight.index_select(0, step_indices)
+        )
 
         stats_accum = {
             "loss": 0.0,
@@ -232,7 +242,7 @@ class PPOTrainer:
         flat_segments = mb_segments.reshape(-1, num_points + 1)
         flat_weights = mb_weights.reshape(-1, num_points)
 
-        new_logprob_flat = self.policy.log_prob(flat_output, flat_segments, flat_weights)
+        new_logprob_flat = self._policy_module.log_prob(flat_output, flat_segments, flat_weights)
         new_logprob = new_logprob_flat.view(mb_size, intervals).sum(dim=-1)
 
         ratio = torch.exp(new_logprob - mb_old_logprob)
@@ -244,13 +254,13 @@ class PPOTrainer:
 
         ref_alpha_pos = base_alpha_pos.unsqueeze(0).repeat(mb_size, 1, 1).reshape(-1, num_points + 1)
         ref_alpha_weight = base_alpha_weight.unsqueeze(0).repeat(mb_size, 1, 1).reshape(-1, num_points)
-        kl_flat = self.policy._dirichlet_kl(flat_output.alpha_pos, ref_alpha_pos) + self.policy._dirichlet_kl(
+        kl_flat = self._policy_module._dirichlet_kl(flat_output.alpha_pos, ref_alpha_pos) + self._policy_module._dirichlet_kl(
             flat_output.alpha_weight, ref_alpha_weight
         )
         kl = kl_flat.view(mb_size, intervals).sum(dim=-1)
         kl_mean = kl.mean()
 
-        entropy_flat = self.policy.entropy(flat_output)
+        entropy_flat = self._policy_module.entropy(flat_output)
         entropy = entropy_flat.view(mb_size, intervals).sum(dim=-1)
         entropy_mean = entropy.mean()
 

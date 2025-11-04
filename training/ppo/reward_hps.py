@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import List, Optional, Sequence, Tuple, Union
 
 import torch
+import torch.distributed as dist
 from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image
 
@@ -26,6 +27,10 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 from huggingface_hub import hf_hub_download
+
+
+def _dist_ready() -> bool:
+    return dist.is_available() and dist.is_initialized()
 
 
 @dataclass
@@ -172,13 +177,35 @@ class RewardHPS:
             )
             cache_root.mkdir(parents=True, exist_ok=True)
             version_key = hps_version_map[self.config.hps_version]
-            weights_path = Path(
-                hf_hub_download(
+            resolved_path: Optional[str] = None
+            if _dist_ready():
+                if dist.get_rank() == 0:
+                    resolved_path = hf_hub_download(
+                        "xswu/HPSv2",
+                        version_key,
+                        cache_dir=str(cache_root),
+                    )
+                dist.barrier()
+                if dist.get_rank() != 0:
+                    resolved_path = hf_hub_download(
+                        "xswu/HPSv2",
+                        version_key,
+                        cache_dir=str(cache_root),
+                        local_files_only=True,
+                    )
+            else:
+                resolved_path = hf_hub_download(
                     "xswu/HPSv2",
                     version_key,
                     cache_dir=str(cache_root),
                 )
-            )
+            if resolved_path is None:
+                raise RuntimeError("Failed to resolve HPS weights path.")
+            weights_path = Path(resolved_path)
+        else:
+            weights_path = Path(weights_path)
+            if _dist_ready():
+                dist.barrier()
 
         model, _, preprocess_val = create_model_and_transforms(
             "ViT-H-14",

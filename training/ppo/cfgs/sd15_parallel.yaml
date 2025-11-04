@@ -23,17 +23,17 @@ reward:
   cache_dir: "weights"
 
 ppo:
-  rollout_batch_size: 28
+  rollout_batch_size: 128
   rloo_k: 4
   ppo_epochs: 1
   minibatch_size: 4
-  learning_rate: 5.0e-5
+  learning_rate: 1.0e-4
   clip_range: 0.2
   kl_coef: 0.00
   entropy_coef: 0.0
   max_grad_norm: 1.0
   decode_rgb: true
-  steps: 99999
+  steps: 99999999
   dirichlet_concentration: 150.0
 
 logging:
