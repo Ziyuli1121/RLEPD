@@ -20,6 +20,7 @@ from .cold_start import build_dirichlet_params, load_predictor_table
 from .policy import EPDParamPolicy
 from .ppo_trainer import PPOTrainer, PPOTrainerConfig
 from .reward_hps import RewardHPS, RewardHPSConfig
+from .reward_multi import RewardMetricWeights, RewardMultiMetric, RewardMultiMetricConfig, RewardMultiMetricPaths
 from .rl_runner import EPDRolloutRunner, RLRunnerConfig
 
 
@@ -261,15 +262,45 @@ def main(argv: Optional[List[str]] = None) -> None:
         net = net.to(device)
         net.eval()
 
-        reward = RewardHPS(
-            RewardHPSConfig(
-                device=device,
-                batch_size=full_config.reward.batch_size,
-                enable_amp=full_config.reward.enable_amp,
-                weights_path=full_config.reward.weights_path,
-                cache_dir=full_config.reward.cache_dir,
-            )
+        hps_cfg = RewardHPSConfig(
+            device=device,
+            batch_size=full_config.reward.batch_size,
+            enable_amp=full_config.reward.enable_amp,
+            weights_path=full_config.reward.weights_path,
+            cache_dir=full_config.reward.cache_dir,
+            hps_version=full_config.reward.hps_version,
         )
+        if full_config.reward.type == "multi":
+            if full_config.reward.multi is None:
+                raise RuntimeError("reward.multi must be configured when reward.type='multi'.")
+            multi_cfg = full_config.reward.multi
+            reward = RewardMultiMetric(
+                RewardMultiMetricConfig(
+                    device=device,
+                    batch_size=full_config.reward.batch_size,
+                    image_value_range=(0.0, 1.0),
+                    weights=RewardMetricWeights(
+                        hps=multi_cfg.weights.hps,
+                        pickscore=multi_cfg.weights.pickscore,
+                        imagereward=multi_cfg.weights.imagereward,
+                        clip=multi_cfg.weights.clip,
+                        aesthetic=multi_cfg.weights.aesthetic,
+                    ),
+                    hps=hps_cfg,
+                    pickscore_model_name_or_path=multi_cfg.pickscore.model,
+                    pickscore_processor_name_or_path=multi_cfg.pickscore.processor,
+                    paths=RewardMultiMetricPaths(
+                        imagereward_checkpoint=multi_cfg.imagereward.checkpoint,
+                        imagereward_med_config=multi_cfg.imagereward.med_config,
+                        imagereward_cache_dir=multi_cfg.imagereward.cache_dir,
+                        clip_cache_dir=multi_cfg.clip.cache_dir,
+                        aesthetic_clip_path=multi_cfg.aesthetic.clip_path,
+                        aesthetic_predictor_path=multi_cfg.aesthetic.predictor_path,
+                    ),
+                )
+            )
+        else:
+            reward = RewardHPS(hps_cfg)
 
         rollout_batch_size = full_config.ppo.rollout_batch_size
         if rollout_batch_size % world_size != 0:
@@ -339,7 +370,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                     if step % full_config.logging.log_interval == 0:
                         summary = ", ".join(
                             f"{k}={reduced_metrics[k]:.4f}"
-                            for k in ("reward_mean", "kl", "policy_loss", "entropy")
+                            for k in ("mixed_reward_mean", "kl", "policy_loss", "mixed_reward_std")
                             if k in reduced_metrics
                         )
                         print(f"[Step {step}] {summary}")

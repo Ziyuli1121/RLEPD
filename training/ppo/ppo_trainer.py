@@ -19,7 +19,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from .policy import EPDParamPolicy
 from .rl_runner import EPDRolloutRunner, RolloutBatch
-from .reward_hps import RewardHPS
+from .reward_base import RewardAdapter, RewardMetadata
 
 
 @dataclass
@@ -63,7 +63,7 @@ class PPOTrainer:
         self,
         policy: EPDParamPolicy | DistributedDataParallel,
         runner: EPDRolloutRunner,
-        reward: RewardHPS,
+        reward: RewardAdapter,
         config: PPOTrainerConfig,
         optimizer: Optional[Optimizer] = None,
         scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
@@ -105,17 +105,12 @@ class PPOTrainer:
         """
 
         batch = self.runner.rollout(self.config.rollout_batch_size)
-        rewards = self._compute_rewards(batch)
+        rewards, reward_meta = self._compute_rewards(batch)
         advantages = self._compute_advantages(rewards)
         stats = self._ppo_update(batch, advantages)
 
-        stats.update(
-            {
-                "reward_mean": rewards.mean().item(),
-                "reward_std": rewards.std(unbiased=False).item() if rewards.numel() > 1 else 0.0,
-                "step": float(self._step),
-            }
-        )
+        stats.update(self._reward_logging_stats(rewards, reward_meta))
+        stats["step"] = float(self._step)
         self._step += 1
         return stats
 
@@ -123,13 +118,48 @@ class PPOTrainer:
     # Rollout utilities
     # ------------------------------------------------------------------ #
 
-    def _compute_rewards(self, batch: RolloutBatch) -> torch.Tensor:
+    def _compute_rewards(self, batch: RolloutBatch) -> Tuple[torch.Tensor, RewardMetadata]:
         images = self._prepare_images(batch)
-        scores = self.reward.score_tensor(images, batch.prompts)
-        if isinstance(scores, tuple):
-            scores = scores[0]
+        result = self.reward.score_tensor(images, batch.prompts, return_metadata=True)
+        if isinstance(result, tuple):
+            scores, metadata = result
+        else:
+            scores = result
+            metadata = {}
         rewards = scores.to(self._device).detach()
-        return rewards
+        return rewards, metadata
+
+    def _reward_logging_stats(self, rewards: torch.Tensor, metadata: RewardMetadata) -> Dict[str, float]:
+        mean_value = rewards.mean().item()
+        std_value = rewards.std(unbiased=False).item() if rewards.numel() > 1 else 0.0
+        stats = {
+            "mixed_reward_mean": mean_value,
+            "mixed_reward_std": std_value,
+        }
+
+        raw_scores: Dict[str, torch.Tensor] = {}
+        if isinstance(metadata, dict):
+            raw_candidate = metadata.get("raw_scores", {})
+            if isinstance(raw_candidate, dict):
+                raw_scores = {
+                    key: value.detach().cpu() if isinstance(value, torch.Tensor) else value
+                    for key, value in raw_candidate.items()
+                }
+
+        def metric_mean(name: str, fallback: Optional[float] = None) -> float:
+            value = raw_scores.get(name)
+            if isinstance(value, torch.Tensor) and value.numel() > 0:
+                return float(value.mean().item())
+            if fallback is not None:
+                return fallback
+            return float("nan")
+
+        stats["hps_mean"] = metric_mean("hps", fallback=mean_value if not raw_scores else None)
+        stats["aesthetic_mean"] = metric_mean("aesthetic")
+        stats["clip_mean"] = metric_mean("clip")
+        stats["imagereward_mean"] = metric_mean("imagereward")
+        stats["pickscore_mean"] = metric_mean("pickscore")
+        return stats
 
     def _prepare_images(self, batch: RolloutBatch) -> torch.Tensor:
         images = batch.images
@@ -184,7 +214,6 @@ class PPOTrainer:
             "loss": 0.0,
             "policy_loss": 0.0,
             "kl": 0.0,
-            "entropy": 0.0,
             "ratio": 0.0,
             "grad_norm": 0.0,
         }
@@ -283,7 +312,6 @@ class PPOTrainer:
             "loss": float(loss.item()),
             "policy_loss": float(policy_loss.item()),
             "kl": float(kl_mean.item()),
-            "entropy": float(entropy_mean.item()),
             "ratio": float(ratio.mean().item()),
             "grad_norm": grad_norm_value,
         }

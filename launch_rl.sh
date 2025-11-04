@@ -24,7 +24,11 @@ torchrun --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_base.yaml
 
 #####################################################################################################
-torchrun --nproc_per_node=8 -m training.ppo.launch \
+torchrun --master_port=29505 --nproc_per_node=1 -m training.ppo.launch \
+    --config training/ppo/cfgs/sd15_parallel.yaml
+
+
+torchrun --master_port=29505 --nproc_per_node=8 -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_parallel.yaml
 #####################################################################################################
 

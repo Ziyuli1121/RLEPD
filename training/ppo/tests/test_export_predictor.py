@@ -178,7 +178,9 @@ class ExportPredictorTest(unittest.TestCase):
 
         metrics_path = self.root / "logs" / "metrics.jsonl"
         with metrics_path.open("w", encoding="utf-8") as handle:
-            handle.write(json.dumps({"step": 10, "reward_mean": 1.23, "policy_loss": -0.42}) + "\n")
+            handle.write(
+                json.dumps({"step": 10, "mixed_reward_mean": 1.23, "policy_loss": -0.42}) + "\n"
+            )
 
         # 准备策略 checkpoint（使用与目标表不同的均值以验证导出逻辑）
         self.target_positions = np.array(
@@ -250,7 +252,7 @@ class ExportPredictorTest(unittest.TestCase):
             manifest = json.load(handle)
         self.assertEqual(manifest["export_step"], 10)
         self.assertIn("latest_metrics", manifest)
-        self.assertEqual(manifest["latest_metrics"]["reward_mean"], 1.23)
+        self.assertEqual(manifest["latest_metrics"]["mixed_reward_mean"], 1.23)
 
     def test_missing_checkpoint_raises(self):
         with self.assertRaises(ExportError):

@@ -126,6 +126,6 @@ if __name__ == "__main__":
 
 '''
 
-python3 exp_visuals/scripts/plot_metrics.py --metrics reward_mean --output exp_visuals/output/reward.png
+python3 exp_visuals/scripts/plot_metrics.py --metrics mixed_reward_mean --output exp_visuals/output/reward.png
 
 '''

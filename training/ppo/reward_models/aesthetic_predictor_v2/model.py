@@ -10,10 +10,18 @@ def torch_normalized(a, axis=-1, order=2):
 
 
 class AestheticV2Model(nn.Module):
-    def __init__(self, clip_path=None, predictor_path=None):
+    def __init__(self, clip_path=None, predictor_path=None, device=None):
         super(AestheticV2Model, self).__init__()
 
-        self.clip_encoder, self.preprocessor = clip.load(clip_path) if clip_path else clip.load("ViT-L/14")
+        if device is None:
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+        self.device = torch.device(device)
+
+        if clip_path:
+            self.clip_encoder, self.preprocessor = clip.load("ViT-L/14", device=self.device, jit=False, download_root=clip_path)
+        else:
+            self.clip_encoder, self.preprocessor = clip.load("ViT-L/14", device=self.device, jit=False)
+
         state_dict = torch.load(predictor_path, map_location="cpu")
         modified_state_dict = {}
         for key in state_dict.keys():
@@ -29,13 +37,15 @@ class AestheticV2Model(nn.Module):
             nn.Linear(16, 1),
         )
         self.aesthetic_predictor.load_state_dict(modified_state_dict)
+        self.aesthetic_predictor = self.aesthetic_predictor.to(self.device)
 
     def forward(self, x):
-        x = torch.stack([self.preprocessor(image) for image in x], dim=0).cuda()
-        x = self.clip_encoder.encode_image(x)
-        x = torch_normalized(x).to(torch.float32)
-        x = self.aesthetic_predictor(x)
-        return x
+        batch = torch.stack([self.preprocessor(image) for image in x], dim=0).to(self.device)
+        with torch.no_grad():
+            batch = self.clip_encoder.encode_image(batch)
+        batch = torch_normalized(batch).to(torch.float32)
+        batch = self.aesthetic_predictor(batch)
+        return batch
 
 
 if __name__ == "__main__":

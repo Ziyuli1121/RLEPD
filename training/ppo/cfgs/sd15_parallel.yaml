@@ -17,17 +17,37 @@ model:
   num_points: null    # will be inferred from predictor snapshot when null
 
 reward:
+  type: "multi"
   weights_path: "weights/HPS_v2.1_compressed.pt"
   batch_size: 2
   enable_amp: true
   cache_dir: "weights"
+  multi:
+    weights:
+      hps: 1.0
+      pickscore: 1.0
+      imagereward: 1.0
+      clip: 1.0
+      aesthetic: 1.0
+    pickscore:
+      model: "yuvalkirstain/PickScore_v1"
+      processor: "laion/CLIP-ViT-H-14-laion2B-s32B-b79K"
+    imagereward:
+      checkpoint: "weights/ImageReward.pt"
+      med_config: "weights/med_config.json"
+      cache_dir: "weights"
+    clip:
+      cache_dir: "weights/clip"
+    aesthetic:
+      predictor_path: "weights/sac+logos+ava1-l14-linearMSE.pth"
+      clip_path: "weights/clip"
 
 ppo:
-  rollout_batch_size: 128
+  rollout_batch_size: 28 # 1gpu:28, 8gpu:128
   rloo_k: 4
   ppo_epochs: 1
   minibatch_size: 4
-  learning_rate: 1.0e-4
+  learning_rate: 1.0e-4 # 5.0e-5
   clip_range: 0.2
   kl_coef: 0.00
   entropy_coef: 0.0

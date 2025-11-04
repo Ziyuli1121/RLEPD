@@ -34,7 +34,12 @@ class _StubReward:
     def score_tensor(self, images, prompts, return_metadata: bool = False):
         scores = torch.linspace(0.1, 0.5, images.shape[0], device=images.device)
         if return_metadata:
-            return scores, {"num_images": int(images.shape[0]), "duration": 0.0, "device": str(images.device)}
+            return scores, {
+                "num_images": int(images.shape[0]),
+                "duration": 0.0,
+                "device": str(images.device),
+                "raw_scores": {"hps": scores.detach().cpu()},
+            }
         return scores
 
 
@@ -117,7 +122,21 @@ class PPOTrainerTest(unittest.TestCase):
         trainer = PPOTrainer(self.policy, runner, reward, config)
         metrics = trainer.train_step()
 
-        expected_keys = {"loss", "policy_loss", "kl", "entropy", "ratio", "grad_norm", "reward_mean", "reward_std", "step"}
+        expected_keys = {
+            "loss",
+            "policy_loss",
+            "kl",
+            "ratio",
+            "grad_norm",
+            "mixed_reward_mean",
+            "mixed_reward_std",
+            "hps_mean",
+            "aesthetic_mean",
+            "clip_mean",
+            "imagereward_mean",
+            "pickscore_mean",
+            "step",
+        }
         self.assertTrue(expected_keys.issubset(metrics.keys()))
 
     def test_rloo_advantages_shape(self) -> None:
@@ -249,7 +268,15 @@ class PPOTrainerIntegrationTest(unittest.TestCase):
         print(f"[PPOIntegration] saved images to {output_dir}")
 
         metrics = trainer.train_step()
-        required = ["loss", "policy_loss", "kl", "entropy", "reward_mean", "reward_std", "ratio"]
+        required = [
+            "loss",
+            "policy_loss",
+            "kl",
+            "mixed_reward_mean",
+            "mixed_reward_std",
+            "ratio",
+            "grad_norm",
+        ]
         for key in required:
             self.assertIn(key, metrics)
             self.assertTrue(math.isfinite(metrics[key]))

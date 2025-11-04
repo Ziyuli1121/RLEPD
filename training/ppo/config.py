@@ -96,11 +96,56 @@ class ModelConfig:
 
 
 @dataclass
+class RewardMultiPickScoreConfig:
+    model: str
+    processor: str
+
+
+@dataclass
+class RewardMultiImageRewardConfig:
+    checkpoint: Optional[Path] = None
+    med_config: Optional[Path] = None
+    cache_dir: Optional[Path] = None
+
+
+@dataclass
+class RewardMultiClipConfig:
+    cache_dir: Optional[Path] = None
+
+
+@dataclass
+class RewardMultiAestheticConfig:
+    predictor_path: Path
+    clip_path: Optional[Path] = None
+
+
+@dataclass
+class RewardMultiWeightsConfig:
+    hps: float = 1.0
+    pickscore: float = 1.0
+    imagereward: float = 1.0
+    clip: float = 1.0
+    aesthetic: float = 1.0
+
+
+@dataclass
+class RewardMultiConfig:
+    weights: RewardMultiWeightsConfig
+    pickscore: RewardMultiPickScoreConfig
+    imagereward: RewardMultiImageRewardConfig
+    clip: RewardMultiClipConfig
+    aesthetic: RewardMultiAestheticConfig
+
+
+@dataclass
 class RewardConfig:
+    type: str
     weights_path: Path
     batch_size: int
     enable_amp: bool
+    hps_version: str = "v2.1"
     cache_dir: Optional[Path] = None
+    multi: Optional[RewardMultiConfig] = None
 
 
 @dataclass
@@ -148,10 +193,13 @@ class FullConfig:
             },
             "model": asdict(self.model),
             "reward": {
+                "type": self.reward.type,
                 "weights_path": str(self.reward.weights_path),
                 "batch_size": self.reward.batch_size,
                 "enable_amp": self.reward.enable_amp,
+                "hps_version": self.reward.hps_version,
                 "cache_dir": str(self.reward.cache_dir) if self.reward.cache_dir else None,
+                "multi": self._multi_to_dict(),
             },
             "ppo": asdict(self.ppo),
             "logging": asdict(self.logging),
@@ -159,6 +207,36 @@ class FullConfig:
 
     def to_json(self, indent: int = 2) -> str:
         return json.dumps(self.to_dict(), indent=indent, ensure_ascii=False)
+
+    def _multi_to_dict(self) -> Optional[dict]:
+        if self.reward.multi is None:
+            return None
+        multi = self.reward.multi
+        return {
+            "weights": {
+                "hps": multi.weights.hps,
+                "pickscore": multi.weights.pickscore,
+                "imagereward": multi.weights.imagereward,
+                "clip": multi.weights.clip,
+                "aesthetic": multi.weights.aesthetic,
+            },
+            "pickscore": {
+                "model": multi.pickscore.model,
+                "processor": multi.pickscore.processor,
+            },
+            "imagereward": {
+                "checkpoint": str(multi.imagereward.checkpoint) if multi.imagereward.checkpoint else None,
+                "med_config": str(multi.imagereward.med_config) if multi.imagereward.med_config else None,
+                "cache_dir": str(multi.imagereward.cache_dir) if multi.imagereward.cache_dir else None,
+            },
+            "clip": {
+                "cache_dir": str(multi.clip.cache_dir) if multi.clip.cache_dir else None,
+            },
+            "aesthetic": {
+                "predictor_path": str(multi.aesthetic.predictor_path),
+                "clip_path": str(multi.aesthetic.clip_path) if multi.aesthetic.clip_path else None,
+            },
+        }
 
 
 def build_config(raw: Dict[str, Any]) -> FullConfig:
@@ -192,11 +270,82 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         num_steps=model_raw.get("num_steps"),
         num_points=model_raw.get("num_points"),
     )
+    reward_type = str(reward_raw.get("type", "hps")).lower()
+    weights_path = Path(reward_raw["weights_path"]).expanduser()
+    reward_batch_size = int(reward_raw.get("batch_size", 2))
+    reward_enable_amp = bool(reward_raw.get("enable_amp", True))
+    hps_version = str(reward_raw.get("hps_version", "v2.1"))
+    cache_dir = Path(reward_raw["cache_dir"]).expanduser() if reward_raw.get("cache_dir") else None
+
+    multi_cfg: Optional[RewardMultiConfig] = None
+    if reward_type == "multi":
+        multi_raw = reward_raw.get("multi")
+        if not isinstance(multi_raw, dict):
+            raise ConfigError("reward.multi must be provided as a mapping when reward.type=multi.")
+
+        weights_raw = multi_raw.get("weights", {})
+        if not isinstance(weights_raw, dict):
+            raise ConfigError("reward.multi.weights must be a mapping.")
+        weights_cfg = RewardMultiWeightsConfig(
+            hps=float(weights_raw.get("hps", 1.0)),
+            pickscore=float(weights_raw.get("pickscore", 1.0)),
+            imagereward=float(weights_raw.get("imagereward", 1.0)),
+            clip=float(weights_raw.get("clip", 1.0)),
+            aesthetic=float(weights_raw.get("aesthetic", 1.0)),
+        )
+
+        pick_raw = multi_raw.get("pickscore", {})
+        if not isinstance(pick_raw, dict):
+            raise ConfigError("reward.multi.pickscore must be a mapping.")
+        pick_cfg = RewardMultiPickScoreConfig(
+            model=str(pick_raw.get("model", "yuvalkirstain/PickScore_v1")),
+            processor=str(pick_raw.get("processor", "laion/CLIP-ViT-H-14-laion2B-s32B-b79K")),
+        )
+
+        image_raw = multi_raw.get("imagereward", {})
+        if not isinstance(image_raw, dict):
+            raise ConfigError("reward.multi.imagereward must be a mapping.")
+        image_cfg = RewardMultiImageRewardConfig(
+            checkpoint=Path(image_raw["checkpoint"]).expanduser() if image_raw.get("checkpoint") else None,
+            med_config=Path(image_raw["med_config"]).expanduser() if image_raw.get("med_config") else None,
+            cache_dir=Path(image_raw["cache_dir"]).expanduser() if image_raw.get("cache_dir") else None,
+        )
+
+        clip_raw = multi_raw.get("clip", {})
+        if not isinstance(clip_raw, dict):
+            raise ConfigError("reward.multi.clip must be a mapping.")
+        clip_cfg = RewardMultiClipConfig(
+            cache_dir=Path(clip_raw["cache_dir"]).expanduser() if clip_raw.get("cache_dir") else None
+        )
+
+        aesthetic_raw = multi_raw.get("aesthetic")
+        if not isinstance(aesthetic_raw, dict):
+            raise ConfigError("reward.multi.aesthetic must be provided when reward.type=multi.")
+        if "predictor_path" not in aesthetic_raw:
+            raise ConfigError("reward.multi.aesthetic.predictor_path is required.")
+        aesthetic_cfg = RewardMultiAestheticConfig(
+            predictor_path=Path(aesthetic_raw["predictor_path"]).expanduser(),
+            clip_path=Path(aesthetic_raw["clip_path"]).expanduser() if aesthetic_raw.get("clip_path") else None,
+        )
+
+        multi_cfg = RewardMultiConfig(
+            weights=weights_cfg,
+            pickscore=pick_cfg,
+            imagereward=image_cfg,
+            clip=clip_cfg,
+            aesthetic=aesthetic_cfg,
+        )
+    elif reward_type != "hps":
+        raise ConfigError(f"Unsupported reward.type: {reward_type}")
+
     reward = RewardConfig(
-        weights_path=Path(reward_raw["weights_path"]).expanduser(),
-        batch_size=int(reward_raw.get("batch_size", 2)),
-        enable_amp=bool(reward_raw.get("enable_amp", True)),
-        cache_dir=Path(reward_raw["cache_dir"]).expanduser() if reward_raw.get("cache_dir") else None,
+        type=reward_type,
+        weights_path=weights_path,
+        batch_size=reward_batch_size,
+        enable_amp=reward_enable_amp,
+        hps_version=hps_version,
+        cache_dir=cache_dir,
+        multi=multi_cfg,
     )
     ppo = PPOConfig(
         rollout_batch_size=int(ppo_raw.get("rollout_batch_size", 4)),
@@ -240,6 +389,27 @@ def validate_config(config: FullConfig, check_paths: bool = True) -> None:
             raise ConfigError(f"HPS weights not found: {config.reward.weights_path}")
         if config.data.prompt_csv and not config.data.prompt_csv.is_file():
             raise ConfigError(f"Prompt CSV not found: {config.data.prompt_csv}")
+        if config.reward.type == "multi":
+            if config.reward.multi is None:
+                raise ConfigError("reward.multi must be set when reward.type=multi.")
+            weights = config.reward.multi.weights
+            total_weight = (
+                max(weights.hps, 0.0)
+                + max(weights.pickscore, 0.0)
+                + max(weights.imagereward, 0.0)
+                + max(weights.clip, 0.0)
+                + max(weights.aesthetic, 0.0)
+            )
+            if total_weight <= 0.0:
+                raise ConfigError("The sum of reward.multi.weights must be positive.")
+            aesthetic = config.reward.multi.aesthetic
+            if not aesthetic.predictor_path.is_file():
+                raise ConfigError(f"Aesthetic predictor weights not found: {aesthetic.predictor_path}")
+            image_cfg = config.reward.multi.imagereward
+            if image_cfg.checkpoint and not image_cfg.checkpoint.is_file():
+                raise ConfigError(f"ImageReward checkpoint not found: {image_cfg.checkpoint}")
+            if image_cfg.med_config and not image_cfg.med_config.is_file():
+                raise ConfigError(f"ImageReward med_config not found: {image_cfg.med_config}")
 
 
 def pretty_format_config(config: FullConfig) -> str:

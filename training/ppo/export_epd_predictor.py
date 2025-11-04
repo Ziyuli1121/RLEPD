@@ -271,7 +271,7 @@ def _format_manifest(
     if metrics:
         manifest["latest_metrics"] = {
             key: metrics.get(key)
-            for key in ("step", "reward_mean", "reward_std", "kl", "policy_loss", "elapsed_sec")
+            for key in ("step", "mixed_reward_mean", "mixed_reward_std", "kl", "policy_loss", "elapsed_sec")
             if key in metrics
         }
     return manifest

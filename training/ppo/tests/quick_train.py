@@ -206,18 +206,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             metrics = trainer.train_step()
             metrics_record = {
                 "step": step,
-                "reward_mean": float(metrics.get("reward_mean", float("nan"))),
-                "reward_std": float(metrics.get("reward_std", float("nan"))),
+                "mixed_reward_mean": float(metrics.get("mixed_reward_mean", float("nan"))),
+                "mixed_reward_std": float(metrics.get("mixed_reward_std", float("nan"))),
                 "kl": float(metrics.get("kl", float("nan"))),
                 "policy_loss": float(metrics.get("policy_loss", float("nan"))),
-                "entropy": float(metrics.get("entropy", float("nan"))),
                 "ratio": float(metrics.get("ratio", float("nan"))),
+                "hps_mean": float(metrics.get("hps_mean", float("nan"))),
+                "aesthetic_mean": float(metrics.get("aesthetic_mean", float("nan"))),
+                "clip_mean": float(metrics.get("clip_mean", float("nan"))),
+                "imagereward_mean": float(metrics.get("imagereward_mean", float("nan"))),
+                "pickscore_mean": float(metrics.get("pickscore_mean", float("nan"))),
                 "elapsed_sec": float(time.time() - start_time),
             }
             print(json.dumps(metrics_record), file=metrics_file, flush=True)
 
             print(
-                f"[QuickTrain] Step {step}: reward_mean={metrics_record['reward_mean']:.4f} "
+                f"[QuickTrain] Step {step}: mixed_reward_mean={metrics_record['mixed_reward_mean']:.4f} "
                 f"kl={metrics_record['kl']:.4f} policy_loss={metrics_record['policy_loss']:.4f}"
             )
 
