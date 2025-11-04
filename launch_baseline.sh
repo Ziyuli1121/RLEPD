@@ -14,12 +14,12 @@ python sample_baseline.py --sampler ipndm \
     --max-order 3 \
     --outdir ./samples/test_ipndm_nfe50_discrete
 
-python sample.py \
-    --predictor_path exps/20251030-235041-sd15_rl_base/export/network-snapshot-export-step005450.pkl \
+MASTER_PORT=29600 python sample.py \
+    --predictor_path exps/99999-ms_coco-11-20-epd-dpm-1-discrete/network-snapshot-099999.pkl \
     --prompt-file src/prompts/test.txt \
-    --seeds "0-999" \
+    --seeds "0-9" \
     --batch 16 \
-    --outdir ./samples/test_rl_5450_nfe18
+    --outdir ./samples/testtesttest_2
 
 #############################################################################
 
