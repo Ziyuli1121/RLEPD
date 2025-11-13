@@ -24,18 +24,21 @@ torchrun --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_base.yaml
 
 #####################################################################################################
-torchrun --master_port=29505 --nproc_per_node=1 -m training.ppo.launch \
+torchrun --master_port=29666 --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_parallel.yaml
 
 
-torchrun --master_port=29505 --nproc_per_node=8 -m training.ppo.launch \
+torchrun --master_port=19600 --nproc_per_node=8 -m training.ppo.launch \
+    --config training/ppo/cfgs/sd15_parallel_re.yaml
+
+torchrun --master_port=29700 --nproc_per_node=8 -m training.ppo.launch \
     --config training/ppo/cfgs/sd15_parallel.yaml
 #####################################################################################################
 
 # 2. 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
-    exps/20251104-013538-sd15_rl_base \
-    --checkpoint checkpoints/policy-step000050.pt
+    exps/20251108-005915-sd15_rl_base \
+    --checkpoint checkpoints/policy-step005000.pt
 
 # 3. 使用导出的 predictor 生成图像
 

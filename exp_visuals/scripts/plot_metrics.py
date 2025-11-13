@@ -42,6 +42,16 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional plot title.",
     )
+    parser.add_argument(
+        "--smooth-window",
+        type=int,
+        default=0,
+        metavar="N",
+        help=(
+            "Optional window size for moving-average smoothing. "
+            "Set to 0 to disable smoothing."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -92,12 +102,50 @@ def extract_series(
     return steps, values
 
 
+def moving_average(values: List[float], window: int) -> List[float]:
+    """Return a moving-average series; keep NaN when window is not fully populated."""
+    if window <= 1:
+        return list(values)
+
+    smoothed: List[float] = []
+    window_values: List[float] = []
+    valid_count = 0
+    running_sum = 0.0
+
+    for value in values:
+        window_values.append(value)
+        if not math.isnan(value):
+            running_sum += value
+            valid_count += 1
+
+        if len(window_values) > window:
+            removed = window_values.pop(0)
+            if not math.isnan(removed):
+                running_sum -= removed
+                valid_count -= 1
+
+        if len(window_values) < window or valid_count < window:
+            smoothed.append(math.nan)
+        else:
+            smoothed.append(running_sum / valid_count)
+
+    return smoothed
+
+
 def plot_metrics(
-    steps: List[float], series: Dict[str, List[float]], title: Optional[str] = None
+    steps: List[float],
+    series: Dict[str, List[float]],
+    title: Optional[str] = None,
+    smooth_window: int = 0,
 ) -> None:
     plt.figure(figsize=(10, 6))
     for metric, values in series.items():
-        plt.plot(steps, values, label=metric)
+        plot_values = values
+        label = metric
+        if smooth_window > 1:
+            plot_values = moving_average(values, smooth_window)
+            label = f"{metric} (smoothed)"
+        plt.plot(steps, plot_values, label=label)
     plt.xlabel("step")
     plt.ylabel("value")
     plt.title(title or "Training Metrics Over Steps")
@@ -108,10 +156,17 @@ def plot_metrics(
 
 def main() -> None:
     args = parse_args()
+    if args.smooth_window < 0:
+        raise ValueError("--smooth-window must be non-negative")
     records = load_metrics(args.metrics_file)
     steps, metric_series = extract_series(records, args.metrics)
 
-    plot_metrics(steps, metric_series, args.title)
+    if args.smooth_window > 1:
+        print(f"[INFO] Applying moving-average smoothing with window={args.smooth_window}")
+    elif args.smooth_window == 1:
+        print("[INFO] Smoothing window of 1 has no effect; plotting raw values.")
+
+    plot_metrics(steps, metric_series, args.title, smooth_window=args.smooth_window)
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(args.output)
@@ -126,6 +181,17 @@ if __name__ == "__main__":
 
 '''
 
-python3 exp_visuals/scripts/plot_metrics.py --metrics mixed_reward_mean --output exp_visuals/output/reward.png
+python exp_visuals/scripts/plot_metrics.py \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251108-005915-sd15_rl_base/logs/metrics.jsonl \
+    --metrics mixed_reward_mean \
+    --smooth-window 500 \
+    --output exp_visuals/output/mixed_reward_8.png
+
+
+python exp_visuals/scripts/plot_metrics.py \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251108-005915-sd15_rl_base/logs/metrics.jsonl \
+    --metrics hps_mean \
+    --smooth-window 500 \
+    --output exp_visuals/output/hps_mean.png
 
 '''

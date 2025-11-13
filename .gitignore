@@ -7,3 +7,5 @@ results/
 __pycache__/
 */__pycache__/
 **/__pycache__/
+exp_visuals/output
+exp_visuals/output_8_128
