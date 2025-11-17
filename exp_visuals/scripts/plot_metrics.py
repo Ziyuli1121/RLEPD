@@ -182,16 +182,28 @@ if __name__ == "__main__":
 '''
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251108-005915-sd15_rl_base/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251115-110803-sd15_rl_base/logs/metrics.jsonl \
     --metrics mixed_reward_mean \
     --smooth-window 500 \
-    --output exp_visuals/output/mixed_reward_8.png
-
+    --output exp_visuals/concen2/mixed_reward_mean.png
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251108-005915-sd15_rl_base/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251115-110803-sd15_rl_base/logs/metrics.jsonl \
     --metrics hps_mean \
     --smooth-window 500 \
-    --output exp_visuals/output/hps_mean.png
+    --output exp_visuals/concen2/hps_mean.png
+
+python exp_visuals/scripts/plot_metrics.py \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251115-110803-sd15_rl_base/logs/metrics.jsonl \
+    --metrics pickscore_mean \
+    --smooth-window 500 \
+    --output exp_visuals/concen2/pickscore_mean.png
+
+python exp_visuals/scripts/plot_metrics.py \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251115-110803-sd15_rl_base/logs/metrics.jsonl \
+    --metrics kl \
+    --smooth-window 0 \
+    --output exp_visuals/concen2/kl.png
+
 
 '''

@@ -77,46 +77,54 @@
 
 
 
-# MASTER_PORT=29600 python sample.py \
-#     --predictor_path exps/20251108-005915-sd15_rl_base/export/network-snapshot-export-step005000.pkl \
-#     --prompt-file src/prompts/test.txt \
-#     --seeds "0-999" \
-#     --batch 16 \
-#     --outdir ./samples/mixed_reward_8rl_5000
+MASTER_PORT=29600 python sample.py \
+    --predictor_path exps/20251115-110803-sd15_rl_base/export/network-snapshot-export-step008000.pkl \
+    --prompt-file src/prompts/test.txt \
+    --seeds "0-999" \
+    --batch 16 \
+    --outdir ./samples/123123
 
 #############################################################################
 
 python -m training.ppo.scripts.score_clip \
-    --images samples/test_ipndm_nfe36_discrete \
+    --images samples/20251115-110803-sd15_rl_base-step008000 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/clip \
-    --output-json results/test_ipndm_nfe36_discrete_clip.json
+    --output-json results/20251115-110803-sd15_rl_base-step008000_clip.json
 
 python -m training.ppo.scripts.score_hps \
-    --images samples/test_ipndm_nfe36_discrete \
+    --images samples/20251115-110803-sd15_rl_base-step008000 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/HPS_v2.1_compressed.pt \
-    --output-json results/test_ipndm_nfe36_discrete_hps.json
+    --output-json results/20251115-110803-sd15_rl_base-step008000_hps.json
 
 python -m training.ppo.scripts.score_aesthetic \
-    --images samples/test_ipndm_nfe36_discrete \
+    --images samples/20251115-110803-sd15_rl_base-step008000 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/sac+logos+ava1-l14-linearMSE.pth \
-    --output-json results/test_ipndm_nfe36_discrete_aesthetic.json
+    --output-json results/20251115-110803-sd15_rl_base-step008000_aesthetic.json
 
 python -m training.ppo.scripts.score_pick \
-    --images samples/test_ipndm_nfe36_discrete \
+    --images samples/20251115-110803-sd15_rl_base-step008000 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/PickScore_v1 \
-    --output-json results/test_ipndm_nfe36_discrete_pick.json
+    --output-json results/20251115-110803-sd15_rl_base-step008000_pick.json
 
 python -m training.ppo.scripts.score_imagereward \
-    --images samples/test_ipndm_nfe36_discrete \
+    --images samples/20251115-110803-sd15_rl_base-step008000 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/ImageReward-v1.0.pt \
-    --output-json results/test_ipndm_nfe36_discrete_imagereward.json
+    --output-json results/20251115-110803-sd15_rl_base-step008000_imagereward.json
+
+python -m training.ppo.scripts.score_mps \
+    --images samples/mixed_reward_8rl_1800 \
+    --pattern "**/*.png" \
+    --prompts src/prompts/test.txt \
+    --weights weights/MPS_overall_checkpoint.pth \
+    --output-json results/mixed_reward_8rl_1800_mps.json
+

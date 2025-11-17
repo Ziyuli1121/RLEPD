@@ -4,7 +4,7 @@ run:
   seed: 0
 
 data:
-  predictor_snapshot: "exps/20251108-005915-sd15_rl_base/export/network-snapshot-export-step005000.pkl"
+  predictor_snapshot: "exps/99999-ms_coco-11-20-epd-dpm-1-discrete/network-snapshot-099999.pkl"
   prompt_csv: null  # use default MS-COCO prompts when null
 
 model:
@@ -25,7 +25,7 @@ reward:
   multi:
     weights:
       hps: 1.0
-      pickscore: 0.0
+      pickscore: 1.0
       imagereward: 0.0
       clip: 0.0
       aesthetic: 0.0
@@ -54,7 +54,7 @@ ppo:
   max_grad_norm: 1.0
   decode_rgb: true
   steps: 99999999
-  dirichlet_concentration: 150.0
+  dirichlet_concentration: 10.0
 
 logging:
   log_interval: 1
