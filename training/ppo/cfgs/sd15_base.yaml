@@ -33,7 +33,7 @@ ppo:
   entropy_coef: 0.0
   max_grad_norm: 1.0
   decode_rgb: true
-  steps: 99999
+  steps: 5
   dirichlet_concentration: 150.0
 
 logging:

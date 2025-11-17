@@ -74,47 +74,33 @@ def load_ldm_model(config, ckpt, verbose=False):
 #----------------------------------------------------------------------------
 
 def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, device=None):
-    model_path, classifier_path = check_file_by_key(dataset_name)
+    """Load the Stable Diffusion 1.5 backbone used across RLEPD."""
+
+    if dataset_name not in [None, "ms_coco"]:
+        raise ValueError("This trimmed RLEPD build only supports dataset_name='ms_coco'.")
+    if guidance_type not in [None, "cfg"]:
+        raise ValueError("Stable Diffusion fine-tuning requires classifier-free guidance (cfg).")
+    if guidance_rate is None:
+        raise ValueError("guidance_rate must be provided for cfg sampling.")
+
+    model_path, _ = check_file_by_key("ms_coco")
     dist.print0(f'Loading the pre-trained diffusion model from "{model_path}"...')
 
-    if dataset_name in ['cifar10', 'ffhq', 'afhqv2', 'imagenet64']:         # models from EDM
-        with dnnlib.util.open_url(model_path, verbose=(dist.get_rank() == 0)) as f:
-            net = pickle.load(f)['ema'].to(device)
-        net.sigma_min = 0.002
-        net.sigma_max = 80
-        model_source = 'edm'
-    elif dataset_name in ['lsun_bedroom']:                                  # models from Consistency Models
-        from models.cm.cm_model_loader import load_cm_model
-        from models.networks_edm import CMPrecond
-        net = load_cm_model(model_path)
-        net = CMPrecond(net).to(device)
-        model_source = 'cm'
-    else:
-        if guidance_type == 'cg':            # clssifier guidance           # models from ADM
-            assert classifier_path is not None
-            from models.guided_diffusion.cg_model_loader import load_cg_model
-            from models.networks_edm import CGPrecond
-            net, classifier = load_cg_model(model_path, classifier_path)
-            net = CGPrecond(net, classifier, guidance_rate=guidance_rate).to(device)
-            model_source = 'adm'
-        elif guidance_type in ['uncond', 'cfg']:                            # models from LDM
-            from omegaconf import OmegaConf
-            from models.networks_edm import CFGPrecond
-            if dataset_name in ['lsun_bedroom_ldm']:
-                config = OmegaConf.load('./models/ldm/configs/latent-diffusion/lsun_bedrooms-ldm-vq-4.yaml')
-                net = load_ldm_model(config, model_path)
-                net = CFGPrecond(net, img_resolution=64, img_channels=3, guidance_rate=1., guidance_type='uncond', label_dim=0).to(device)
-            elif dataset_name in ['ms_coco']:
-                assert guidance_type == 'cfg'
-                config = OmegaConf.load('./models/ldm/configs/stable-diffusion/v1-inference.yaml')
-                net = load_ldm_model(config, model_path)
-                net = CFGPrecond(net, img_resolution=64, img_channels=4, guidance_rate=guidance_rate, guidance_type='classifier-free', label_dim=True).to(device)
-            model_source = 'ldm'
-    if net is None:
-        raise ValueError("Got wrong settings: check dataset_name and guidance_type!")
-    net.eval()
+    from omegaconf import OmegaConf
+    from models.networks_edm import CFGPrecond
 
-    return net, model_source
+    config = OmegaConf.load("./models/ldm/configs/stable-diffusion/v1-inference.yaml")
+    net = load_ldm_model(config, model_path)
+    net = CFGPrecond(
+        net,
+        img_resolution=64,
+        img_channels=4,
+        guidance_rate=guidance_rate,
+        guidance_type="classifier-free",
+        label_dim=True,
+    ).to(device)
+    net.eval()
+    return net, "ldm"
 
 #----------------------------------------------------------------------------
 

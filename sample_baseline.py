@@ -65,70 +65,31 @@ def parse_int_list(s):
 
 
 def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, device=None):
-    model_path, classifier_path = check_file_by_key(dataset_name)
+    if dataset_name not in [None, "ms_coco"]:
+        raise ValueError("Baseline sampling now only supports dataset_name='ms_coco'.")
+    if guidance_type not in [None, "cfg"]:
+        raise ValueError("Stable Diffusion baselines require classifier-free guidance (cfg).")
+    if guidance_rate is None:
+        raise ValueError("guidance_rate must be provided for cfg sampling.")
+
+    model_path, _ = check_file_by_key("ms_coco")
     dist.print0(f'Loading the pre-trained diffusion model from "{model_path}"...')
 
-    if dataset_name in ["cifar10", "ffhq", "afhqv2", "imagenet64"]:
-        with dnnlib.util.open_url(model_path, verbose=(dist.get_rank() == 0)) as f:
-            net = pickle.load(f)["ema"].to(device)
-        net.sigma_min = 0.002
-        net.sigma_max = 80
-        model_source = "edm"
-    elif dataset_name in ["lsun_bedroom"]:
-        from models.cm.cm_model_loader import load_cm_model
-        from models.networks_edm import CMPrecond
+    from omegaconf import OmegaConf
+    from models.networks_edm import CFGPrecond
 
-        net = load_cm_model(model_path)
-        net = CMPrecond(net).to(device)
-        model_source = "cm"
-    else:
-        if guidance_type == "cg":
-            from models.guided_diffusion.cg_model_loader import load_cg_model
-            from models.networks_edm import CGPrecond
-
-            assert classifier_path is not None
-            net, classifier = load_cg_model(model_path, classifier_path)
-            net = CGPrecond(
-                net, classifier, guidance_rate=guidance_rate, guidance_type=guidance_type, label_dim=0
-            ).to(device)
-            model_source = "adm"
-        elif guidance_type in ["uncond", "cfg"]:
-            from omegaconf import OmegaConf
-            from models.networks_edm import CFGPrecond
-
-            if dataset_name in ["lsun_bedroom_ldm"]:
-                config = OmegaConf.load(
-                    "./models/ldm/configs/latent-diffusion/lsun_bedrooms-ldm-vq-4.yaml"
-                )
-                net = load_ldm_model(config, model_path)
-                net = CFGPrecond(
-                    net,
-                    img_resolution=64,
-                    img_channels=3,
-                    guidance_rate=1.0,
-                    guidance_type="uncond",
-                    label_dim=0,
-                ).to(device)
-            elif dataset_name in ["ms_coco"]:
-                assert guidance_type == "cfg"
-                config = OmegaConf.load("./models/ldm/configs/stable-diffusion/v1-inference.yaml")
-                net = load_ldm_model(config, model_path)
-                net = CFGPrecond(
-                    net,
-                    img_resolution=64,
-                    img_channels=4,
-                    guidance_rate=guidance_rate,
-                    guidance_type="classifier-free",
-                    label_dim=True,
-                ).to(device)
-            model_source = "ldm"
-        else:
-            raise ValueError("Got wrong settings: check dataset_name and guidance_type!")
-    if net is None:
-        raise ValueError("Got wrong settings: check dataset_name and guidance_type!")
+    config = OmegaConf.load("./models/ldm/configs/stable-diffusion/v1-inference.yaml")
+    net = load_ldm_model(config, model_path)
+    net = CFGPrecond(
+        net,
+        img_resolution=64,
+        img_channels=4,
+        guidance_rate=guidance_rate,
+        guidance_type="classifier-free",
+        label_dim=True,
+    ).to(device)
     net.eval()
-
-    return net, model_source
+    return net, "ldm"
 
 
 def load_ldm_model(config, ckpt, verbose=False):
@@ -163,8 +124,9 @@ def load_ldm_model(config, ckpt, verbose=False):
 @click.option(
     "--dataset-name",
     type=str,
-    required=True,
-    help="Dataset key (e.g., ms_coco, cifar10) used to load the base diffusion model.",
+    default="ms_coco",
+    show_default=True,
+    help="Dataset key used to load the base diffusion model (trimmed to ms_coco/SD1.5).",
 )
 @click.option("--model-path", type=str, help="Optional override for diffusion model weights.")
 @click.option(
