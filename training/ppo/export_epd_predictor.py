@@ -224,6 +224,18 @@ def _prepare_pred_kwargs(
     pred_kwargs["alpha"] = pred_kwargs.get("alpha", 10.0)
     pred_kwargs["fcn"] = bool(pred_kwargs.get("fcn", False))
     pred_kwargs["max_order"] = pred_kwargs.get("max_order", 2)
+    backend = model_cfg.get("backend", pred_kwargs.get("backend", "ldm"))
+    if backend is None:
+        backend = "ldm"
+    pred_kwargs["backend"] = str(backend)
+    backend_options = model_cfg.get("backend_options", pred_kwargs.get("backend_config", {}))
+    if backend_options is None:
+        backend_options = {}
+    elif not isinstance(backend_options, Mapping):
+        raise ExportError("model.backend_options must be a mapping when provided.")
+    else:
+        backend_options = dict(backend_options)
+    pred_kwargs["backend_config"] = backend_options
     return pred_kwargs
 
 

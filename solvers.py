@@ -80,6 +80,9 @@ def get_epd_prediction(predictor, step_idx, net, unet_enc_out, use_afs, batch_si
 # Get the denoised output from the pre-trained diffusion models.
 
 def get_denoised(net, x, t, class_labels=None, condition=None, unconditional_condition=None):
+    backend_type = getattr(net, "backend", None)
+    if backend_type == "sd3":
+        return net(x, t, condition=condition)
     if hasattr(net, 'guidance_type'):     # models from LDM and Stable Diffusion
         denoised = net(x, t, condition=condition, unconditional_condition=unconditional_condition)
     else:

@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import PIL.Image
 import dnnlib
+import json
 from torch import autocast
 from torch_utils import distributed as dist
 from torchvision.utils import make_grid, save_image
@@ -100,7 +101,101 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
         label_dim=True,
     ).to(device)
     net.eval()
+    net.backend = "ldm"
+    net.backend_config = {}
     return net, "ldm"
+
+
+def _resolve_torch_dtype(value, device):
+    if value is None or value == "auto":
+        return torch.float16 if device.type == "cuda" else torch.float32
+    if isinstance(value, torch.dtype):
+        return value
+    if isinstance(value, str):
+        lowered = value.lower()
+        if lowered in {"float32", "fp32"}:
+            return torch.float32
+        if lowered in {"float16", "fp16"}:
+            return torch.float16
+        if lowered in {"bfloat16", "bf16"}:
+            return torch.bfloat16
+    raise ValueError(f"Unsupported torch_dtype: {value}")
+
+
+def create_model_sd3(
+    dataset_name=None,
+    guidance_type=None,
+    guidance_rate=None,
+    device=None,
+    backend_config=None,
+):
+    if guidance_rate is None:
+        raise ValueError("guidance_rate must be provided for SD3 sampling.")
+    cfg = backend_config or {}
+    model_id = cfg.get("model_name_or_path") or cfg.get("model_id") or "stabilityai/stable-diffusion-3-medium-diffusers"
+    torch_dtype = _resolve_torch_dtype(cfg.get("torch_dtype", "auto"), device if isinstance(device, torch.device) else torch.device(device))
+    enable_offload = bool(cfg.get("enable_model_cpu_offload", False))
+    revision = cfg.get("revision")
+    variant = cfg.get("variant")
+    use_safetensors = cfg.get("use_safetensors", True)
+    token = cfg.get("token")
+    pipeline_kwargs = cfg.get("pipeline_kwargs") if isinstance(cfg.get("pipeline_kwargs"), dict) else None
+
+    from models.backends import SD3DiffusersBackend
+
+    backend = SD3DiffusersBackend(
+        model_name_or_path=model_id,
+        device=device,
+        torch_dtype=torch_dtype,
+        guidance_scale=guidance_rate,
+        enable_model_cpu_offload=enable_offload,
+        revision=revision,
+        variant=variant,
+        use_safetensors=use_safetensors,
+        token=token,
+        pipeline_kwargs=pipeline_kwargs,
+    )
+    backend.backend_config = dict(cfg)
+    return backend, "sd3"
+
+
+def _prepare_sd3_condition(net, prompts, guidance_rate, backend_config):
+    prompts_list = list(prompts)
+    if guidance_rate == 1.0:
+        negative_prompt = None
+    else:
+        base_negative = backend_config.get("negative_prompt", "")
+        if isinstance(base_negative, list):
+            if len(base_negative) != len(prompts_list):
+                raise ValueError("Length of negative_prompt list must match batch size.")
+            negative_prompt = base_negative
+        else:
+            negative_prompt = [str(base_negative)] * len(prompts_list)
+    return net.prepare_condition(
+        prompt=prompts_list,
+        negative_prompt=negative_prompt,
+        guidance_scale=guidance_rate,
+    )
+
+
+def create_model_backend(
+    dataset_name=None,
+    guidance_type=None,
+    guidance_rate=None,
+    backend="ldm",
+    backend_config=None,
+    device=None,
+):
+    backend = (backend or "ldm").lower()
+    if backend == "sd3":
+        return create_model_sd3(
+            dataset_name=dataset_name,
+            guidance_type=guidance_type,
+            guidance_rate=guidance_rate,
+            device=device,
+            backend_config=backend_config,
+        )
+    return create_model(dataset_name, guidance_type, guidance_rate, device)
 
 #----------------------------------------------------------------------------
 
@@ -114,6 +209,8 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
 @click.option('--prompt',                  help='Prompt for Stable Diffusion sampling', metavar='STR',              type=str)
 @click.option('--prompt-file',             help='Path to text/CSV file with prompts (one per line)', metavar='PATH', type=click.Path(exists=True, dir_okay=False))
 @click.option('--use_fp16',                help='Whether to use mixed precision', metavar='BOOL',                   type=bool, default=False)
+@click.option('--backend',                 help='Override backend type (defaults to predictor metadata).',          type=str)
+@click.option('--backend-config',          help='JSON string overriding backend-specific options.',                 type=str)
 
 # Options for sampling
 @click.option('--return_inters',           help='Whether to save intermediate outputs', metavar='BOOL',             type=bool, default=False)
@@ -125,7 +222,19 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
 
 #----------------------------------------------------------------------------
 
-def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_file, device=torch.device('cuda'), **solver_kwargs):
+def main(
+    predictor_path,
+    max_batch_size,
+    seeds,
+    grid,
+    outdir,
+    subdirs,
+    prompt_file,
+    backend,
+    backend_config,
+    device=torch.device('cuda'),
+    **solver_kwargs,
+):
 
     dist.init()
     num_batches = ((len(seeds) - 1) // (max_batch_size * dist.get_world_size()) + 1) * dist.get_world_size()
@@ -178,9 +287,43 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_fi
     solver_kwargs['prompt'] = prompt
     solver_kwargs['dataset_name'] = dataset_name = predictor.dataset_name
 
+    user_backend = backend.strip() if backend is not None else None
+    backend_config_override = {}
+    if backend_config:
+        try:
+            parsed_override = json.loads(backend_config)
+        except json.JSONDecodeError as exc:
+            raise click.ClickException(f"Invalid JSON for --backend-config: {exc}") from exc
+        if not isinstance(parsed_override, dict):
+            raise click.ClickException("--backend-config must decode to a JSON object.")
+        backend_config_override = parsed_override
+
+    predictor_backend = getattr(predictor, "backend", "ldm")
+    predictor_backend_config = getattr(predictor, "backend_config", {})
+    if isinstance(predictor_backend_config, dict):
+        base_backend_config = dict(predictor_backend_config)
+    else:
+        try:
+            base_backend_config = dict(predictor_backend_config)
+        except Exception:
+            base_backend_config = {}
+
+    resolved_backend = user_backend or predictor_backend
+    merged_backend_config = base_backend_config
+    merged_backend_config.update(backend_config_override)
+    solver_kwargs['backend'] = resolved_backend
+    solver_kwargs['backend_config'] = merged_backend_config
+
 
     # Load pre-trained diffusion models.
-    net, solver_kwargs['model_source'] = create_model(dataset_name, solver_kwargs['guidance_type'], solver_kwargs['guidance_rate'], device)
+    net, solver_kwargs['model_source'] = create_model_backend(
+        dataset_name=dataset_name,
+        guidance_type=solver_kwargs['guidance_type'],
+        guidance_rate=solver_kwargs['guidance_rate'],
+        backend=resolved_backend,
+        backend_config=merged_backend_config,
+        device=device,
+    )
     # TODO: support mixed precision 
     # net.use_fp16 = solver_kwargs['use_fp16']
 
@@ -256,29 +399,44 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_fi
 
 
         class_labels = c = uc = None
+        if solver_kwargs['prompt'] is None:
+            if sample_captions is None:
+                prompts = ["" for _ in range(batch_size)]
+            else:
+                start = int(batch_seeds[0])
+                end = int(batch_seeds[-1])
+                if end >= len(sample_captions):
+                    raise RuntimeError(
+                        f"Batch seed index {end} exceeds available prompts ({len(sample_captions)})."
+                    )
+                prompts = sample_captions[start:end + 1]
+                if len(prompts) != batch_size:
+                    raise RuntimeError(
+                        f"Prompt slice length {len(prompts)} does not match batch size {batch_size}."
+                    )
+        else:
+            prompts = [solver_kwargs['prompt'] for _ in range(batch_size)]
+        if isinstance(prompts, tuple):
+            prompts = list(prompts)
+
         if net.label_dim:
             if solver_kwargs['model_source'] == 'adm':                                              # ADM models
                 class_labels = rnd.randint(net.label_dim, size=(batch_size,), device=device)
             elif solver_kwargs['model_source'] == 'ldm' and dataset_name == 'ms_coco':
-                if solver_kwargs['prompt'] is None:
-                    if sample_captions is None:
-                        raise RuntimeError("Prompt list is empty; provide --prompt or --prompt-file.")
-                    start = int(batch_seeds[0])
-                    end = int(batch_seeds[-1])
-                    if end >= len(sample_captions):
-                        raise RuntimeError(
-                            f"Batch seed index {end} exceeds available prompts ({len(sample_captions)})."
-                        )
-                    prompts = sample_captions[start:end + 1]
-                else:
-                    prompts = [solver_kwargs['prompt'] for i in range(batch_size)]
                 if solver_kwargs['guidance_rate'] != 1.0:
                     uc = net.model.get_learned_conditioning(batch_size * [""])
-                if isinstance(prompts, tuple):
-                    prompts = list(prompts)
                 c = net.model.get_learned_conditioning(prompts)
             else:
                 class_labels = torch.eye(net.label_dim, device=device)[rnd.randint(net.label_dim, size=[batch_size], device=device)]
+
+        condition_payload = None
+        if solver_kwargs['model_source'] == 'sd3':
+            condition_payload = _prepare_sd3_condition(
+                net,
+                prompts,
+                solver_kwargs['guidance_rate'],
+                merged_backend_config,
+            )
 
         # Generate images.
         with torch.no_grad():
@@ -291,6 +449,13 @@ def main(predictor_path, max_batch_size, seeds, grid, outdir, subdirs, prompt_fi
                             call_kwargs['verbose'] = True
                         images, _ = sampler_fn(net, latents, **call_kwargs)
                         images = net.model.decode_first_stage(images)
+            elif solver_kwargs['model_source'] == 'sd3':
+                call_kwargs = dict(solver_kwargs)
+                call_kwargs['condition'] = condition_payload
+                if batch_id == 0:
+                    call_kwargs['verbose'] = True
+                images, _ = sampler_fn(net, latents, **call_kwargs)
+                images = net.vae_decode(images)
             else:
                 call_kwargs = dict(solver_kwargs)
                 call_kwargs['class_labels'] = class_labels

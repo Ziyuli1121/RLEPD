@@ -13,6 +13,6 @@ torchrun --master_port=59500 --nproc_per_node=1 -m training.ppo.launch \
 
 # 导出策略均值为 EPD predictor
 python -m training.ppo.export_epd_predictor \
-    exps/20251115-110803-sd15_rl_base \
-    --checkpoint checkpoints/policy-step008000.pt
+    exps/20251118-151316-sd15_rl_base \
+    --checkpoint checkpoints/policy-step000005.pt
 

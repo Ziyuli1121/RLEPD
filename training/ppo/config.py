@@ -93,6 +93,8 @@ class ModelConfig:
     schedule_rho: float
     num_steps: Optional[int] = None
     num_points: Optional[int] = None
+    backend: str = "ldm"
+    backend_options: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -261,6 +263,14 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         predictor_snapshot=Path(data_raw["predictor_snapshot"]).expanduser(),
         prompt_csv=Path(data_raw["prompt_csv"]).expanduser() if data_raw.get("prompt_csv") else None,
     )
+    backend_value = str(model_raw.get("backend", "ldm"))
+    backend_options_raw = model_raw.get("backend_options", {})
+    if backend_options_raw is None:
+        backend_options_raw = {}
+    if not isinstance(backend_options_raw, dict):
+        raise ConfigError("model.backend_options must be a mapping when provided.")
+    backend_options = copy.deepcopy(backend_options_raw)
+
     model = ModelConfig(
         dataset_name=str(model_raw.get("dataset_name", "ms_coco")),
         guidance_type=str(model_raw.get("guidance_type", "cfg")),
@@ -269,6 +279,8 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         schedule_rho=float(model_raw.get("schedule_rho", 1.0)),
         num_steps=model_raw.get("num_steps"),
         num_points=model_raw.get("num_points"),
+        backend=backend_value,
+        backend_options=backend_options,
     )
     reward_type = str(reward_raw.get("type", "hps")).lower()
     weights_path = Path(reward_raw["weights_path"]).expanduser()

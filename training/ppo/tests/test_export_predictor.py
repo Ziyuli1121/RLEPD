@@ -127,6 +127,8 @@ class ExportPredictorTest(unittest.TestCase):
                 "lower_order_final": True,
                 "alpha": 10.0,
                 "max_order": 2,
+                "backend": "ldm",
+                "backend_config": {},
             },
         }
         with (self.snapshot_path.parent / "training_options.json").open("w", encoding="utf-8") as handle:
@@ -146,6 +148,8 @@ class ExportPredictorTest(unittest.TestCase):
                 "guidance_rate": 7.5,
                 "schedule_type": "discrete",
                 "schedule_rho": 1.0,
+                "backend": "ldm",
+                "backend_options": {},
             },
             "reward": {
                 "weights_path": "weights/HPS_v2.1_compressed.pt",
@@ -245,6 +249,8 @@ class ExportPredictorTest(unittest.TestCase):
         self.assertEqual(pred_kwargs["num_steps"], self.base_table.num_steps)
         self.assertEqual(pred_kwargs["num_points"], self.base_table.num_points)
         self.assertEqual(pred_kwargs["dataset_name"], "ms_coco")
+        self.assertEqual(pred_kwargs["backend"], "ldm")
+        self.assertEqual(pred_kwargs["backend_config"], {})
         self.assertIn("export_info", options)
         self.assertIn("sanitized_rows", options["export_info"])
 

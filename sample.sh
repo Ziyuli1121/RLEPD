@@ -33,7 +33,7 @@ python sample_baseline.py --sampler ipndm \
 
 # epd inference
 MASTER_PORT=29600 python sample.py \
-    --predictor_path exps/20251115-110803-sd15_rl_base/export/network-snapshot-export-step008000.pkl \
+    --predictor_path exps/20251118-151316-sd15_rl_base/export/network-snapshot-export-step000005.pkl \
     --prompt-file src/prompts/test.txt \
     --seeds "0-99" \
     --batch 16 \

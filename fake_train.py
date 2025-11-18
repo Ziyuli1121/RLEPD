@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import pickle
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -46,6 +46,8 @@ class SnapshotConfig:
     r_epsilon: float
     weight_base: float | None
     weight_epsilon: float
+    backend: str = "ldm"
+    backend_options: dict = field(default_factory=dict)
 
 
 def _positive_float(text: str) -> float:
@@ -73,6 +75,18 @@ def _parse_betas(text: str) -> Tuple[float, float]:
     except ValueError as exc:
         raise argparse.ArgumentTypeError("optimizer betas must be numeric.") from exc
     return beta1, beta2
+
+
+def _parse_backend_options(text: str | None) -> dict:
+    if text is None:
+        return {}
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise argparse.ArgumentTypeError(f"backend-options must be valid JSON: {text}") from exc
+    if not isinstance(data, dict):
+        raise argparse.ArgumentTypeError("backend-options must be a JSON object.")
+    return data
 
 
 def _format_run_dir(raw_outdir: Path, override: str | None) -> str:
@@ -166,6 +180,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip writing training_options.json even though defaults are provided.",
     )
+    parser.add_argument("--backend", type=str, default="ldm", help="Backend identifier, e.g., 'ldm' or 'sd3'.")
+    parser.add_argument(
+        "--backend-options",
+        type=str,
+        default=None,
+        help="JSON object with backend-specific options (e.g., model IDs).",
+    )
     return parser.parse_args()
 
 
@@ -244,6 +265,8 @@ def _instantiate_predictor(config: SnapshotConfig) -> EPD_predictor:
         predict_x0=config.predict_x0,
         lower_order_final=config.lower_order_final,
         alpha=config.alpha,
+        backend=config.backend,
+        backend_config=config.backend_options,
     )
     return predictor
 
@@ -284,6 +307,7 @@ def _build_snapshot(
             "fcn": config.fcn,
             "afs": config.afs,
             "alpha": config.alpha,
+            "backend": config.backend,
             **extras,
         }
         with summary_path.open("w", encoding="utf-8") as handle:
@@ -294,6 +318,7 @@ def _build_snapshot(
 def main() -> None:
     args = parse_args()
     optimizer_betas = _parse_betas(args.optimizer_betas)
+    backend_options = _parse_backend_options(args.backend_options)
 
     outdir_raw = Path(args.outdir)
     outdir = outdir_raw.expanduser().resolve()
@@ -329,6 +354,8 @@ def main() -> None:
         r_epsilon=args.r_epsilon,
         weight_base=args.weight_base,
         weight_epsilon=args.weight_epsilon,
+        backend=args.backend,
+        backend_options=backend_options,
     )
 
     positions = _build_positions(config)
@@ -381,6 +408,8 @@ def main() -> None:
                 "max_order": config.max_order,
                 "predict_x0": config.predict_x0,
                 "lower_order_final": config.lower_order_final,
+                "backend": config.backend,
+                "backend_config": config.backend_options,
             },
             "optimizer_kwargs": {
                 "class_name": "torch.optim.Adam",

@@ -32,6 +32,8 @@ class EPD_predictor(torch.nn.Module):
         lower_order_final       = True,
         fcn                     = False,
         alpha                   = 10,
+        backend                 = "ldm",
+        backend_config          = None,
         **kwargs
     ):
         super().__init__()
@@ -58,6 +60,15 @@ class EPD_predictor(torch.nn.Module):
         self.num_points = num_points
         self.fcn = fcn
         self.alpha = alpha
+        self.backend = backend
+        cfg = backend_config if backend_config is not None else {}
+        if isinstance(cfg, dict):
+            self.backend_config = dict(cfg)
+        else:
+            try:
+                self.backend_config = dict(cfg)  # type: ignore[arg-type]
+            except Exception:
+                self.backend_config = {}
 
         self.r_params = nn.Parameter(torch.randn(num_steps-1, num_points)) 
         self.scale_dir_params = nn.Parameter(torch.randn(num_steps-1, num_points))

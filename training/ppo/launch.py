@@ -251,12 +251,14 @@ def main(argv: Optional[List[str]] = None) -> None:
 
         if is_master:
             print("[Launch] Loading Stable Diffusion model...")
-        from sample import create_model  # Local import to avoid overhead on dry run
+        from sample import create_model_backend  # Local import to avoid overhead on dry run
 
-        net, model_source = create_model(
+        net, model_source = create_model_backend(
             dataset_name=full_config.model.dataset_name,
             guidance_type=full_config.model.guidance_type,
             guidance_rate=full_config.model.guidance_rate,
+            backend=full_config.model.backend,
+            backend_config=full_config.model.backend_options,
             device=device,
         )
         net = net.to(device)
@@ -328,6 +330,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             world_size=world_size,
             verbose=False,
             model_source=model_source,
+            backend=full_config.model.backend,
+            backend_config=full_config.model.backend_options,
         )
         runner = EPDRolloutRunner(runner_config)
 

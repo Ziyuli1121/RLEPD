@@ -54,6 +54,8 @@ class RLRunnerConfig(object):
         rng_seed=None,
         verbose=False,
         model_source="ldm",
+        backend="ldm",
+        backend_config=None,
         rank=0,
         world_size=1,
     ):
@@ -73,6 +75,15 @@ class RLRunnerConfig(object):
         self.rng_seed = rng_seed
         self.verbose = verbose
         self.model_source = model_source
+        self.backend = backend
+        cfg = backend_config if backend_config is not None else {}
+        if isinstance(cfg, dict):
+            self.backend_config = dict(cfg)
+        else:
+            try:
+                self.backend_config = dict(cfg)  # type: ignore[arg-type]
+            except Exception:
+                self.backend_config = {}
         self.rank = rank
         self.world_size = max(1, world_size)
 
@@ -253,6 +264,9 @@ class EPDRolloutRunner:
         self.device = config.device
         self.rank = getattr(config, "rank", 0)
         self.world_size = getattr(config, "world_size", 1)
+        self.backend = getattr(config, "backend", getattr(self.net, "backend", "ldm"))
+        cfg = getattr(config, "backend_config", {})
+        self.backend_config = dict(cfg) if isinstance(cfg, dict) else {}
 
         self.prompts = _load_prompts(config.prompt_csv)
         self.prompt_cursor = self.rank % len(self.prompts)
@@ -324,6 +338,26 @@ class EPDRolloutRunner:
         condition = None
         unconditional = None
         class_labels = None
+
+        backend_type = getattr(self.net, "backend", self.backend)
+        if backend_type == "sd3":
+            prompts_list = list(prompts)
+            if self.config.guidance_rate == 1.0:
+                negative_prompt = None
+            else:
+                base_negative = self.backend_config.get("negative_prompt", "")
+                if isinstance(base_negative, list):
+                    if len(base_negative) != len(prompts_list):
+                        raise RuntimeError("Length of backend_config.negative_prompt must match batch size.")
+                    negative_prompt = base_negative
+                else:
+                    negative_prompt = [str(base_negative)] * len(prompts_list)
+            condition = self.net.prepare_condition(
+                prompt=prompts_list,
+                negative_prompt=negative_prompt,
+                guidance_scale=self.config.guidance_rate,
+            )
+            return condition, None, None
 
         if getattr(self.net, "label_dim", 0):
             if self.config.model_source == "ldm":
