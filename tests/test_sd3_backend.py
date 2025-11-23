@@ -166,6 +166,8 @@ def _run_case(
         f"| latents {tuple(latents.shape)} "
         f"| denoised stats (min={denoised.min().item():.3f}, max={denoised.max().item():.3f})"
     )
+    schedule = backend.make_flowmatch_schedule(num_steps=3, device=exec_device)
+    print(f"[OK] flowmatch schedule shape={tuple(schedule.shape)} first={schedule[0].item():.4f}")
 
 
 def main() -> None:

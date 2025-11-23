@@ -95,6 +95,10 @@ class ModelConfig:
     num_points: Optional[int] = None
     backend: str = "ldm"
     backend_options: Dict[str, Any] = field(default_factory=dict)
+    sigma_min: Optional[float] = None
+    sigma_max: Optional[float] = None
+    flowmatch_mu: Optional[float] = None
+    flowmatch_shift: Optional[float] = None
 
 
 @dataclass
@@ -281,6 +285,10 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         num_points=model_raw.get("num_points"),
         backend=backend_value,
         backend_options=backend_options,
+        sigma_min=float(model_raw["sigma_min"]) if model_raw.get("sigma_min") is not None else None,
+        sigma_max=float(model_raw["sigma_max"]) if model_raw.get("sigma_max") is not None else None,
+        flowmatch_mu=float(model_raw["flowmatch_mu"]) if model_raw.get("flowmatch_mu") is not None else None,
+        flowmatch_shift=float(model_raw["flowmatch_shift"]) if model_raw.get("flowmatch_shift") is not None else None,
     )
     reward_type = str(reward_raw.get("type", "hps")).lower()
     weights_path = Path(reward_raw["weights_path"]).expanduser()

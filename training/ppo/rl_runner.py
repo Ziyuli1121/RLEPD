@@ -58,6 +58,8 @@ class RLRunnerConfig(object):
         backend_config=None,
         rank=0,
         world_size=1,
+        sigma_min=None,
+        sigma_max=None,
     ):
         self.policy = policy
         self.net = net
@@ -86,6 +88,8 @@ class RLRunnerConfig(object):
                 self.backend_config = {}
         self.rank = rank
         self.world_size = max(1, world_size)
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
 
 
 class RolloutBatch(object):
@@ -385,6 +389,11 @@ class EPDRolloutRunner:
 
         condition, unconditional_condition, class_labels = self._prepare_conditions(prompts)
 
+        sigma_min = self.config.sigma_min if self.config.sigma_min is not None else getattr(self.net, "sigma_min", None)
+        sigma_max = self.config.sigma_max if self.config.sigma_max is not None else getattr(self.net, "sigma_max", None)
+        if sigma_min is None or sigma_max is None:
+            raise RuntimeError("sigma_min and sigma_max must be defined for the selected backend.")
+
         start_time = time.time()
         try:
             with torch.no_grad():
@@ -395,8 +404,8 @@ class EPDRolloutRunner:
                     condition=condition,
                     unconditional_condition=unconditional_condition,
                     num_steps=self.config.num_steps,
-                    sigma_min=self.net.sigma_min,
-                    sigma_max=self.net.sigma_max,
+                    sigma_min=sigma_min,
+                    sigma_max=sigma_max,
                     schedule_type=self.config.schedule_type,
                     schedule_rho=self.config.schedule_rho,
                     guidance_type=self.config.guidance_type,

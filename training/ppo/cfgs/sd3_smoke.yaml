@@ -11,11 +11,13 @@ model:
   dataset_name: "ms_coco"
   guidance_type: "cfg"
   guidance_rate: 7.5
-  schedule_type: "discrete"   # predictor snapshot仍为SD1.5，可根据需要改成flowmatch
+  schedule_type: "flowmatch"
   schedule_rho: 1.0
   num_steps: null
   num_points: null
   backend: "sd3"
+  sigma_min: 1.0e-3
+  sigma_max: 1.0
   backend_options:
     model_name_or_path: "stabilityai/stable-diffusion-3-medium-diffusers"
     torch_dtype: "auto"

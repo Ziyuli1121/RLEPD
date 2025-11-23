@@ -332,6 +332,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             model_source=model_source,
             backend=full_config.model.backend,
             backend_config=full_config.model.backend_options,
+            sigma_min=full_config.model.sigma_min,
+            sigma_max=full_config.model.sigma_max,
         )
         runner = EPDRolloutRunner(runner_config)
 

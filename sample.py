@@ -131,7 +131,7 @@ def create_model_sd3(
 ):
     if guidance_rate is None:
         raise ValueError("guidance_rate must be provided for SD3 sampling.")
-    cfg = backend_config or {}
+    cfg = dict(backend_config) if isinstance(backend_config, dict) else {}
     model_id = cfg.get("model_name_or_path") or cfg.get("model_id") or "stabilityai/stable-diffusion-3-medium-diffusers"
     torch_dtype = _resolve_torch_dtype(cfg.get("torch_dtype", "auto"), device if isinstance(device, torch.device) else torch.device(device))
     enable_offload = bool(cfg.get("enable_model_cpu_offload", False))
@@ -140,6 +140,7 @@ def create_model_sd3(
     use_safetensors = cfg.get("use_safetensors", True)
     token = cfg.get("token")
     pipeline_kwargs = cfg.get("pipeline_kwargs") if isinstance(cfg.get("pipeline_kwargs"), dict) else None
+    flowmatch_mu = cfg.get("flowmatch_mu")
 
     from models.backends import SD3DiffusersBackend
 
@@ -154,8 +155,14 @@ def create_model_sd3(
         use_safetensors=use_safetensors,
         token=token,
         pipeline_kwargs=pipeline_kwargs,
+        flowmatch_mu=flowmatch_mu,
     )
     backend.backend_config = dict(cfg)
+    if "flowmatch_mu" not in backend.backend_config and backend.default_flowmatch_mu is not None:
+        backend.backend_config["flowmatch_mu"] = backend.default_flowmatch_mu
+    backend.backend_config.setdefault("flowmatch_shift", backend.flow_shift)
+    backend.backend_config.setdefault("sigma_min", backend.sigma_min)
+    backend.backend_config.setdefault("sigma_max", backend.sigma_max)
     return backend, "sd3"
 
 

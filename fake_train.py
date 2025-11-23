@@ -556,4 +556,22 @@ python fake_train.py \
   --schedule-type flowmatch \
   --backend sd3 \
   --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3-medium-diffusers"}'
+
+python fake_train.py \
+  --outdir exps/fake-sd35-15 \
+  --num-steps 15 \
+  --num-points 2 \
+  --guidance-rate 4.5 \
+  --schedule-type flowmatch \
+  --backend sd3 \
+  --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3.5-medium"}'
+
+python fake_train.py \
+  --outdir exps/fake-sd35-9 \
+  --num-steps 9 \
+  --num-points 2 \
+  --guidance-rate 4.5 \
+  --schedule-type flowmatch \
+  --backend sd3 \
+  --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3.5-medium"}'
 '''

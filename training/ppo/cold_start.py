@@ -374,6 +374,12 @@ def _load_table_from_pkl(
 
     num_steps = int(_get_attr(predictor, "num_steps", positions.shape[0] + 1))
     num_points = int(_get_attr(predictor, "num_points", positions.shape[1]))
+    backend_name = _get_attr(predictor, "backend", None)
+    backend_config = _get_attr(predictor, "backend_config", None)
+    if isinstance(backend_config, dict):
+        backend_config = dict(backend_config)
+    else:
+        backend_config = None
 
     metadata = {
         "dataset_name": _get_attr(predictor, "dataset_name", None),
@@ -382,9 +388,15 @@ def _load_table_from_pkl(
         "guidance_type": _get_attr(predictor, "guidance_type", None),
         "schedule_type": _get_attr(predictor, "schedule_type", None),
         "schedule_rho": _get_attr(predictor, "schedule_rho", None),
+        "sigma_min": _get_attr(predictor, "sigma_min", None),
+        "sigma_max": _get_attr(predictor, "sigma_max", None),
+        "flowmatch_mu": _get_attr(predictor, "flowmatch_mu", None),
+        "flowmatch_shift": _get_attr(predictor, "flowmatch_shift", None),
         "afs": _get_attr(predictor, "afs", None),
         "predict_x0": _get_attr(predictor, "predict_x0", None),
         "lower_order_final": _get_attr(predictor, "lower_order_final", None),
+        "backend": backend_name,
+        "backend_config": backend_config,
         "sanitized": bool(reordered_rows.any() or adjusted_rows.any()),
         "sanitized_rows": int(np.count_nonzero(reordered_rows | adjusted_rows)),
     }

@@ -24,6 +24,20 @@ except ImportError as exc:  # pragma: no cover - handled explicitly for clarity
     ) from exc
 
 
+def _calculate_shift(
+    image_seq_len: int,
+    base_seq_len: int = 256,
+    max_seq_len: int = 4096,
+    base_shift: float = 0.5,
+    max_shift: float = 1.16,
+) -> float:
+    """Match the diffusers helper that maps sequence length to scheduler `mu`."""
+
+    m = (max_shift - base_shift) / (max_seq_len - base_seq_len)
+    b = base_shift - m * base_seq_len
+    return image_seq_len * m + b
+
+
 PromptType = Union[str, Sequence[str]]
 
 
@@ -58,7 +72,7 @@ class SD3DiffusersBackend(nn.Module):
         *,
         device: Union[str, torch.device] = "cuda",
         torch_dtype: torch.dtype = torch.float16,
-        guidance_scale: float = 7.5,
+        guidance_scale: float = 4.5,
         enable_model_cpu_offload: bool = False,
         max_sequence_length: int = 256,
         clip_skip: Optional[int] = None,
@@ -67,6 +81,7 @@ class SD3DiffusersBackend(nn.Module):
         use_safetensors: Optional[bool] = True,
         token: Optional[str] = None,
         pipeline_kwargs: Optional[dict] = None,
+        flowmatch_mu: Optional[float] = None,
     ) -> None:
         super().__init__()
         self.default_guidance_scale = float(guidance_scale)
@@ -93,9 +108,13 @@ class SD3DiffusersBackend(nn.Module):
             **load_kwargs,
         )
         if enable_model_cpu_offload:
-            self.pipeline.enable_model_cpu_offload()
+            # Sequential offload ensures modules unload immediately after each transformer call,
+            # which keeps memory usage manageable for multi-point EPD updates.
+            self.pipeline.enable_sequential_cpu_offload()
+            self._using_seq_offload = True
         else:
             self.pipeline.to(self.device)
+            self._using_seq_offload = False
 
         # Public attributes consumed by sampler/sample.py.
         transformer_cfg = self.pipeline.transformer.config
@@ -109,6 +128,17 @@ class SD3DiffusersBackend(nn.Module):
         self.sigma_min = float(getattr(scheduler, "sigma_min", 0.0))
         self.sigma_max = float(getattr(scheduler, "sigma_max", 1.0))
         self.flow_shift = float(getattr(scheduler, "shift", 1.0))
+        scheduler_cfg = getattr(scheduler, "config", {})
+        self.flowmatch_use_dynamic_shifting = bool(getattr(scheduler_cfg, "use_dynamic_shifting", False))
+        self.flowmatch_base_seq_len = int(getattr(scheduler_cfg, "base_image_seq_len", 256))
+        self.flowmatch_max_seq_len = int(getattr(scheduler_cfg, "max_image_seq_len", 4096))
+        self.flowmatch_base_shift = float(getattr(scheduler_cfg, "base_shift", 0.5))
+        self.flowmatch_max_shift = float(getattr(scheduler_cfg, "max_shift", 1.16))
+        self.flowmatch_patch_size = int(getattr(transformer_cfg, "patch_size", 1))
+        self.default_flowmatch_mu = flowmatch_mu
+        if self.default_flowmatch_mu is None and self.flowmatch_use_dynamic_shifting:
+            self.default_flowmatch_mu = self._compute_default_mu()
+        self.current_flowmatch_mu: Optional[float] = None
 
     # --------------------------------------------------------------------- #
     # Conditioning helpers
@@ -184,46 +214,9 @@ class SD3DiffusersBackend(nn.Module):
         exec_device = self.pipeline._execution_device
         latent_dtype = self.pipeline.transformer.dtype
         latents = latents.to(device=exec_device, dtype=latent_dtype)
-        batch_size = latents.shape[0]
+        velocity = self._run_transformer_step(latents, t, condition)
+        self._maybe_free_offload_hooks()
 
-        timestep = self._format_timesteps(t, batch_size, latents.dtype, latents.device)
-
-        do_cfg = condition.do_classifier_free_guidance
-        prompt_embeds = condition.prompt_embeds
-        pooled_prompt_embeds = condition.pooled_prompt_embeds
-
-        if do_cfg:
-            if condition.negative_prompt_embeds is None or condition.negative_pooled_prompt_embeds is None:
-                raise ValueError("Negative prompt embeddings are required when guidance_scale > 1.0.")
-            prompt_embeds = torch.cat([condition.negative_prompt_embeds, prompt_embeds], dim=0)
-            pooled_prompt_embeds = torch.cat(
-                [condition.negative_pooled_prompt_embeds, pooled_prompt_embeds],
-                dim=0,
-            )
-
-        latent_model_input = torch.cat([latents, latents], dim=0) if do_cfg else latents
-        timestep = (
-            torch.cat([timestep, timestep], dim=0)
-            if do_cfg
-            else timestep
-        )
-
-        noise_pred = self.pipeline.transformer(
-            hidden_states=latent_model_input,
-            timestep=timestep,
-            encoder_hidden_states=prompt_embeds,
-            pooled_projections=pooled_prompt_embeds,
-            joint_attention_kwargs=None,
-            return_dict=False,
-        )[0]
-
-        if do_cfg:
-            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-            velocity = noise_pred_uncond + condition.guidance_scale * (noise_pred_text - noise_pred_uncond)
-        else:
-            velocity = noise_pred
-
-        # Convert velocity into the "denoised" quantity expected by solvers.
         t_reshaped = self._reshape_timestep(t, latents)
         denoised = latents - t_reshaped * velocity
         return denoised
@@ -243,6 +236,115 @@ class SD3DiffusersBackend(nn.Module):
         if output_type == "tensor":
             return image
         return self.pipeline.image_processor.postprocess(image, output_type=output_type)
+
+    # ------------------------------------------------------------------ #
+    # Flow-matching helpers
+
+    def _compute_default_mu(self, height: Optional[int] = None, width: Optional[int] = None) -> Optional[float]:
+        if not self.flowmatch_use_dynamic_shifting:
+            return None
+        patch = max(1, self.flowmatch_patch_size)
+        h = height or self.img_resolution
+        w = width or self.img_resolution
+        image_seq_len = (h // patch) * (w // patch)
+        return _calculate_shift(
+            image_seq_len=image_seq_len,
+            base_seq_len=self.flowmatch_base_seq_len,
+            max_seq_len=self.flowmatch_max_seq_len,
+            base_shift=self.flowmatch_base_shift,
+            max_shift=self.flowmatch_max_shift,
+        )
+
+    def resolve_flowmatch_mu(
+        self,
+        *,
+        height: Optional[int] = None,
+        width: Optional[int] = None,
+        override: Optional[float] = None,
+    ) -> Optional[float]:
+        if override is not None:
+            return float(override)
+        if self.default_flowmatch_mu is not None:
+            return float(self.default_flowmatch_mu)
+        return self._compute_default_mu(height=height, width=width)
+
+    def make_flowmatch_schedule(
+        self,
+        num_steps: int,
+        *,
+        device: Optional[torch.device] = None,
+        mu: Optional[float] = None,
+    ) -> torch.Tensor:
+        """
+        Mirror diffusers' FlowMatchEulerDiscreteScheduler timesteps for a given step count.
+        """
+        scheduler = self.pipeline.scheduler
+        scheduler_device = self.pipeline._execution_device
+        resolved_mu = self.resolve_flowmatch_mu(override=mu)
+        scheduler_kwargs = {}
+        if resolved_mu is not None:
+            scheduler_kwargs["mu"] = resolved_mu
+        scheduler.set_timesteps(num_inference_steps=num_steps, device=scheduler_device, **scheduler_kwargs)
+        # diffusers appends an extra terminal sigma=0; we only expose the primary steps.
+        sigmas = scheduler.sigmas[:-1]
+        sigmas = sigmas.to(device=device or scheduler_device)
+        self.current_flowmatch_mu = resolved_mu
+        return sigmas
+
+    def _run_transformer_step(
+        self,
+        latents: torch.Tensor,
+        t: Union[float, torch.Tensor],
+        condition: SD3Conditioning,
+    ) -> torch.Tensor:
+        exec_device = self.pipeline._execution_device
+        timestep = self._format_timesteps(t, latents.shape[0], latents.dtype, latents.device)
+        do_cfg = condition.do_classifier_free_guidance
+        prompt_embeds = condition.prompt_embeds
+        pooled_prompt_embeds = condition.pooled_prompt_embeds
+
+        if do_cfg:
+            if condition.negative_prompt_embeds is None or condition.negative_pooled_prompt_embeds is None:
+                raise ValueError("Negative prompt embeddings are required when guidance_scale > 1.0.")
+            prompt_embeds = torch.cat([condition.negative_prompt_embeds, prompt_embeds], dim=0)
+            pooled_prompt_embeds = torch.cat(
+                [condition.negative_pooled_prompt_embeds, pooled_prompt_embeds],
+                dim=0,
+            )
+
+        latent_model_input = torch.cat([latents, latents], dim=0) if do_cfg else latents
+        # FlowMatch transformers expect timesteps scaled by num_train_timesteps (sigmas -> absolute t).
+        sigma = timestep
+        timesteps = sigma * self.pipeline.scheduler.config.num_train_timesteps
+        timesteps = torch.cat([timesteps, timesteps], dim=0) if do_cfg else timesteps
+
+        # Use pipeline's transformer call so accelerate hooks remain active.
+        joint_kwargs = getattr(self.pipeline, "_joint_attention_kwargs", None)
+
+        noise_pred = self.pipeline.transformer(
+            hidden_states=latent_model_input,
+            timestep=timesteps,
+            encoder_hidden_states=prompt_embeds,
+            pooled_projections=pooled_prompt_embeds,
+            joint_attention_kwargs=joint_kwargs,
+            return_dict=False,
+        )[0]
+
+        if do_cfg:
+            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+            velocity = noise_pred_uncond + condition.guidance_scale * (noise_pred_text - noise_pred_uncond)
+        else:
+            velocity = noise_pred
+        return velocity.to(device=exec_device, dtype=latents.dtype)
+
+    def _maybe_free_offload_hooks(self) -> None:
+        if not getattr(self, "_using_seq_offload", False):
+            return
+        # Release hooks after each call to match diffusers pipeline behavior and keep memory low.
+        try:
+            self.pipeline.maybe_free_model_hooks()
+        except Exception:
+            pass
 
     @staticmethod
     def _format_timesteps(

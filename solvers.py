@@ -12,6 +12,12 @@ def init_hook(net, class_labels=None):
     unet_enc_out = []
     def hook_fn(module, input, output):
         unet_enc_out.append(output.detach())
+    backend_type = getattr(net, "backend", None)
+    if backend_type == "sd3":
+        class _DummyHook:
+            def remove(self):
+                return None
+        return unet_enc_out, _DummyHook()
     if hasattr(net, 'guidance_type'):                                       # models from LDM and Stable Diffusion
         hook = net.model.model.diffusion_model.middle_block.register_forward_hook(hook_fn)
     elif net.img_resolution == 256:                                         # models from CM and ADM with resolution of 256
@@ -117,7 +123,12 @@ def epd_sampler(
     # Time step discretization.
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
     # Main sampling loop.
-    x_next = latents * t_steps[0]
+    backend_type = getattr(net, "backend", None)
+    # SD3 的 flowmatch 时间轴以 sigma=1 开始，无需额外缩放；其他后端保持旧行为。
+    if backend_type == "sd3":
+        x_next = latents
+    else:
+        x_next = latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = []
@@ -165,21 +176,52 @@ def epd_sampler(
                 print_str += f'w{j}: {weight_s[0,j,:,:].mean().item():.5f} |'
             dist.print0(print_str)
         
-        for j in range(num_points):
-            r = r_s[:,j:j+1,:,:]
-            scale_time = scale_time_s[:,j:j+1,:,:]
-            scale_dir = scale_dir_s[:,j:j+1,:,:]
-            w = weight_s[:,j:j+1,:,:]
-            t_mid = (t_next ** r) * (t_cur ** (1 - r))
-            x_mid = x_cur + (t_mid - t_cur) * d_cur
+        # Switch update rule for SD3 flowmatch: combine multi-point velocities then step once.
+        backend_type = getattr(net, "backend", None)
+        if backend_type == "sd3":
+            # Combine multi-point velocities, then do a single Euler step on sigma grid.
+            if num_points == 1:
+                v_combined = d_cur  # already evaluated at t_cur
+            else:
+                v_combined = torch.zeros_like(x_cur)
+                for j in range(num_points):
+                    r = r_s[:, j : j + 1, :, :]
+                    scale_time = scale_time_s[:, j : j + 1, :, :]
+                    scale_dir = scale_dir_s[:, j : j + 1, :, :]
+                    w = weight_s[:, j : j + 1, :, :]
+                    t_mid = (t_next ** r) * (t_cur ** (1 - r))
+                    x_mid = x_cur + (t_mid - t_cur) * d_cur
 
-            denoised_t_mid = get_denoised(net, x_mid, scale_time*t_mid, 
-                                          class_labels=class_labels, 
-                                          condition=condition, 
-                                          unconditional_condition=unconditional_condition)
+                    denoised_t_mid = get_denoised(
+                        net,
+                        x_mid,
+                        scale_time * t_mid,
+                        class_labels=class_labels,
+                        condition=condition,
+                        unconditional_condition=unconditional_condition,
+                    )
 
-            d_mid = (x_mid - denoised_t_mid) / t_mid
-            x_next = x_next + w * scale_dir * (t_next - t_cur) * d_mid
+                    d_mid = (x_mid - denoised_t_mid) / t_mid  # velocity v at mid-point
+                    v_combined = v_combined + w * scale_dir * d_mid
+            # Euler step using combined velocity and sigma delta
+            x_next = x_cur + (t_next - t_cur) * v_combined
+        else:
+            # Original EPD update for non-SD3 backends
+            for j in range(num_points):
+                r = r_s[:,j:j+1,:,:]
+                scale_time = scale_time_s[:,j:j+1,:,:]
+                scale_dir = scale_dir_s[:,j:j+1,:,:]
+                w = weight_s[:,j:j+1,:,:]
+                t_mid = (t_next ** r) * (t_cur ** (1 - r))
+                x_mid = x_cur + (t_mid - t_cur) * d_cur
+
+                denoised_t_mid = get_denoised(net, x_mid, scale_time*t_mid, 
+                                              class_labels=class_labels, 
+                                              condition=condition, 
+                                              unconditional_condition=unconditional_condition)
+
+                d_mid = (x_mid - denoised_t_mid) / t_mid
+                x_next = x_next + w * scale_dir * (t_next - t_cur) * d_mid
 
 
         x_list.append(x_next)

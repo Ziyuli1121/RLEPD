@@ -109,6 +109,8 @@ def _create_runner(full_config: cfg.FullConfig, device: torch.device, overrides:
         model_source=model_source,
         backend=backend,
         backend_config=backend_options,
+        sigma_min=full_config.model.sigma_min,
+        sigma_max=full_config.model.sigma_max,
     )
     runner = EPDRolloutRunner(runner_config)
     return runner
