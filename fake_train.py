@@ -21,6 +21,10 @@ except ModuleNotFoundError as exc:
 
 from training.networks import EPD_predictor
 
+# FlowMatch Euler defaults used by SD3 scheduler (shift=3.0)
+SD3_FLOWMATCH_SIGMA_MIN = 0.0029940119760479044
+SD3_FLOWMATCH_SIGMA_MAX = 1.0
+
 
 @dataclass
 class SnapshotConfig:
@@ -48,6 +52,10 @@ class SnapshotConfig:
     weight_epsilon: float
     backend: str = "ldm"
     backend_options: dict = field(default_factory=dict)
+    sigma_min: Optional[float] = None
+    sigma_max: Optional[float] = None
+    flowmatch_mu: Optional[float] = None
+    flowmatch_shift: Optional[float] = None
 
 
 def _positive_float(text: str) -> float:
@@ -187,7 +195,50 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="JSON object with backend-specific options (e.g., model IDs).",
     )
+    parser.add_argument(
+        "--sigma-min",
+        type=_positive_float,
+        default=None,
+        help="Optional explicit sigma_min for the time schedule metadata.",
+    )
+    parser.add_argument(
+        "--sigma-max",
+        type=_positive_float,
+        default=None,
+        help="Optional explicit sigma_max for the time schedule metadata.",
+    )
+    parser.add_argument(
+        "--flowmatch-mu",
+        type=float,
+        default=None,
+        help="Optional mu override when using flowmatch schedules.",
+    )
+    parser.add_argument(
+        "--flowmatch-shift",
+        type=float,
+        default=None,
+        help="Optional shift override when using flowmatch schedules.",
+    )
     return parser.parse_args()
+
+
+def _validate_args(args: argparse.Namespace) -> None:
+    """Basic sanity checks so we fail fast on incompatible settings."""
+
+    if args.num_steps < 2:
+        raise ValueError("--num-steps must be at least 2.")
+    if args.num_points < 1:
+        raise ValueError("--num-points must be at least 1.")
+
+    backend = (args.backend or "ldm").lower()
+    if backend == "sd3":
+        if args.schedule_type != "flowmatch":
+            raise ValueError("SD3 backend requires --schedule-type flowmatch.")
+        # Flow-matching runs on sigma in [0,1]; make sure bounds are set.
+        if args.sigma_min is None:
+            args.sigma_min = SD3_FLOWMATCH_SIGMA_MIN
+        if args.sigma_max is None:
+            args.sigma_max = SD3_FLOWMATCH_SIGMA_MAX
 
 
 def _ensure_monotonic(row: np.ndarray, min_gap: float = 1e-4) -> np.ndarray:
@@ -308,6 +359,11 @@ def _build_snapshot(
             "afs": config.afs,
             "alpha": config.alpha,
             "backend": config.backend,
+            "backend_config": config.backend_options,
+            "sigma_min": config.sigma_min,
+            "sigma_max": config.sigma_max,
+            "flowmatch_mu": config.flowmatch_mu,
+            "flowmatch_shift": config.flowmatch_shift,
             **extras,
         }
         with summary_path.open("w", encoding="utf-8") as handle:
@@ -317,8 +373,21 @@ def _build_snapshot(
 
 def main() -> None:
     args = parse_args()
+    _validate_args(args)
     optimizer_betas = _parse_betas(args.optimizer_betas)
     backend_options = _parse_backend_options(args.backend_options)
+    if not isinstance(backend_options, dict):
+        backend_options = {}
+    else:
+        backend_options = dict(backend_options)
+    if args.sigma_min is not None:
+        backend_options.setdefault("sigma_min", args.sigma_min)
+    if args.sigma_max is not None:
+        backend_options.setdefault("sigma_max", args.sigma_max)
+    if args.flowmatch_mu is not None:
+        backend_options.setdefault("flowmatch_mu", args.flowmatch_mu)
+    if args.flowmatch_shift is not None:
+        backend_options.setdefault("flowmatch_shift", args.flowmatch_shift)
 
     outdir_raw = Path(args.outdir)
     outdir = outdir_raw.expanduser().resolve()
@@ -356,6 +425,10 @@ def main() -> None:
         weight_epsilon=args.weight_epsilon,
         backend=args.backend,
         backend_options=backend_options,
+        sigma_min=args.sigma_min,
+        sigma_max=args.sigma_max,
+        flowmatch_mu=args.flowmatch_mu,
+        flowmatch_shift=args.flowmatch_shift,
     )
 
     positions = _build_positions(config)
@@ -363,6 +436,11 @@ def main() -> None:
 
     predictor = _instantiate_predictor(config)
     r_params, weight_logits = _configure_state(predictor, positions, weights)
+    # Persist scheduler/back-end hints on the module for downstream tooling.
+    predictor.sigma_min = config.sigma_min
+    predictor.sigma_max = config.sigma_max
+    predictor.flowmatch_mu = config.flowmatch_mu
+    predictor.flowmatch_shift = config.flowmatch_shift
 
     extras = {
         "r_mean": positions.mean().item(),
@@ -460,12 +538,22 @@ if __name__ == "__main__":
 
 '''
 
+
 python fake_train.py \
-  --num-steps 11 \
+  --outdir exps/fake-sd3-15 \
+  --num-steps 15 \
   --num-points 2 \
-  --outdir exps/99999-ms_coco-11-20-epd-dpm-1-discrete \
-  --snapshot-step 99999 \
-  --run-dir ./exps/99999-ms_coco-11-20-epd-dpm-1-discrete
+  --guidance-rate 4.5 \
+  --schedule-type flowmatch \
+  --backend sd3 \
+  --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3-medium-diffusers"}'
 
-
+python fake_train.py \
+  --outdir exps/fake-sd3-9 \
+  --num-steps 9 \
+  --num-points 2 \
+  --guidance-rate 4.5 \
+  --schedule-type flowmatch \
+  --backend sd3 \
+  --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3-medium-diffusers"}'
 '''
