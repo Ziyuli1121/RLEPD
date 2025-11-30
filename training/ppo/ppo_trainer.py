@@ -164,7 +164,12 @@ class PPOTrainer:
     def _prepare_images(self, batch: RolloutBatch) -> torch.Tensor:
         images = batch.images
         if self.config.decode_rgb:
-            decoder = getattr(getattr(self.runner.net, "model", None), "decode_first_stage", None)
+            backend = getattr(getattr(self, "runner", None), "net", None)
+            # Prefer SD3-style backend.vae_decode; fall back to LDM decode_first_stage.
+            decoder = getattr(backend, "vae_decode", None)
+            if decoder is None:
+                decoder = getattr(getattr(backend, "model", None), "decode_first_stage", None)
+
             if callable(decoder):
                 with torch.no_grad():
                     images = decoder(images)

@@ -103,18 +103,25 @@ class SD3DiffusersBackend(nn.Module):
         if pipeline_kwargs:
             load_kwargs.update(pipeline_kwargs)
 
+        print(
+            f"[SD3Backend] Loading pipeline model='{model_name_or_path}' "
+            f"device={self.device} dtype={torch_dtype} offload={enable_model_cpu_offload}"
+        )
         self.pipeline = StableDiffusion3Pipeline.from_pretrained(
             model_name_or_path,
             **load_kwargs,
         )
+        print("[SD3Backend] Pipeline weights loaded.")
         if enable_model_cpu_offload:
             # Sequential offload ensures modules unload immediately after each transformer call,
             # which keeps memory usage manageable for multi-point EPD updates.
             self.pipeline.enable_sequential_cpu_offload()
             self._using_seq_offload = True
+            print("[SD3Backend] Enabled sequential CPU offload.")
         else:
             self.pipeline.to(self.device)
             self._using_seq_offload = False
+            print(f"[SD3Backend] Moved pipeline to device {self.device}.")
 
         # Public attributes consumed by sampler/sample.py.
         transformer_cfg = self.pipeline.transformer.config

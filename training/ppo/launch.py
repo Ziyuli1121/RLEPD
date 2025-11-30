@@ -159,6 +159,35 @@ def enrich_model_dimensions(full_config: cfg.FullConfig, dry_run: bool) -> Dict[
         )
     full_config.model.num_steps = table.num_steps
     full_config.model.num_points = table.num_points
+
+    # Prefer predictor metadata for backend/schedule/hyperparams when available.
+    meta = table.metadata
+    def _override(field: str, key: str) -> None:
+        val_meta = meta.get(key, None) if isinstance(meta, dict) else None
+        if val_meta is None:
+            return
+        val_cfg = getattr(full_config.model, field, None)
+        if val_cfg is not None and val_cfg != val_meta:
+            print(f"[Config] Overriding model.{field}={val_cfg} with predictor metadata {val_meta}")
+        setattr(full_config.model, field, val_meta)
+
+    _override("schedule_type", "schedule_type")
+    _override("schedule_rho", "schedule_rho")
+    _override("guidance_type", "guidance_type")
+    _override("guidance_rate", "guidance_rate")
+    _override("dataset_name", "dataset_name")
+    _override("backend", "backend")
+    _override("sigma_min", "sigma_min")
+    _override("sigma_max", "sigma_max")
+    _override("flowmatch_mu", "flowmatch_mu")
+    _override("flowmatch_shift", "flowmatch_shift")
+
+    backend_cfg_meta = meta.get("backend_config") if isinstance(meta, dict) else None
+    if isinstance(backend_cfg_meta, dict) and backend_cfg_meta:
+        if full_config.model.backend_options and full_config.model.backend_options != backend_cfg_meta:
+            print(f"[Config] Overriding model.backend_options with predictor metadata")
+        full_config.model.backend_options = backend_cfg_meta
+
     return {
         "num_steps": table.num_steps,
         "num_points": table.num_points,
@@ -253,14 +282,22 @@ def main(argv: Optional[List[str]] = None) -> None:
             print("[Launch] Loading Stable Diffusion model...")
         from sample import create_model_backend  # Local import to avoid overhead on dry run
 
+        backend_config = dict(full_config.model.backend_options)
+        if full_config.model.flowmatch_mu is not None:
+            backend_config.setdefault("flowmatch_mu", full_config.model.flowmatch_mu)
+        if full_config.model.flowmatch_shift is not None:
+            backend_config.setdefault("flowmatch_shift", full_config.model.flowmatch_shift)
+
         net, model_source = create_model_backend(
             dataset_name=full_config.model.dataset_name,
             guidance_type=full_config.model.guidance_type,
             guidance_rate=full_config.model.guidance_rate,
             backend=full_config.model.backend,
-            backend_config=full_config.model.backend_options,
+            backend_config=backend_config,
             device=device,
         )
+        if is_master:
+            print("[Launch] Stable Diffusion model loaded.")
         net = net.to(device)
         net.eval()
 

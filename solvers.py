@@ -382,8 +382,9 @@ def dpm_sampler(
 ):
     # Time step discretization.
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
+    backend_type = getattr(net, "backend", None)
     # Main sampling loop.
-    x_next = latents * t_steps[0]
+    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = []
@@ -449,6 +450,7 @@ def dpm_sampler_2(
     DPM-Solver-2 implementation aligned with project sampler interface.
     """
     del inner_steps  # Unused but kept for signature compatibility.
+    backend_type = getattr(net, "backend", None)
 
     if t_steps is None:
         if num_steps is None:
@@ -465,7 +467,7 @@ def dpm_sampler_2(
     else:
         t_steps = torch.as_tensor(t_steps, device=latents.device, dtype=latents.dtype)
 
-    x_next = latents * t_steps[0]
+    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = [x_next]
@@ -540,43 +542,60 @@ def heun_sampler(
     afs=False, 
     denoise_to_zero=False, 
     return_inters=False, 
-    inner_steps=3,  # New parameter for the number of inner steps
-    r=0.5,
+    inner_steps=3,  # Kept for signature compatibility; unused in standard Heun.
+    r=0.5,          # Kept for signature compatibility; unused in standard Heun.
     **kwargs
 ):
+    del inner_steps, r
     # Time step discretization.
-    t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho)
+    t_steps = get_schedule(
+        num_steps,
+        sigma_min,
+        sigma_max,
+        device=latents.device,
+        schedule_type=schedule_type,
+        schedule_rho=schedule_rho,
+        net=net,
+    )
+    backend_type = getattr(net, "backend", None)
     # Main sampling loop.
-    x_next = latents * t_steps[0]
+    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
-    x_list = []
-    x_list.append(x_next)
+    x_list = [x_next]
 
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):  # 0, ..., N-1
         x_cur = x_next
-        # Compute the inner step size
-        t_s = get_schedule(inner_steps, t_next, t_cur, device=latents.device, schedule_type='polynomial', schedule_rho=7)
-        for i, (t_c, t_n) in enumerate(zip(t_s[:-1],t_s[1:])):
-            # Euler step.
-            use_afs = (afs and i == 0)
-            if use_afs:
-                d_cur = x_cur / ((1 + t_c**2).sqrt())
-            else:
-                denoised = get_denoised(net, x_cur, t_c, class_labels=class_labels, condition=condition, unconditional_condition=unconditional_condition)
-                d_cur = (x_cur - denoised) / t_c
-            x_next = x_cur + (t_n - t_c) * d_cur
+        use_afs = afs and i == 0
+        if use_afs:
+            d_cur = x_cur / ((1 + t_cur ** 2).sqrt())
+        else:
+            denoised = get_denoised(
+                net,
+                x_cur,
+                t_cur,
+                class_labels=class_labels,
+                condition=condition,
+                unconditional_condition=unconditional_condition,
+            )
+            d_cur = (x_cur - denoised) / t_cur
 
-            # Apply 2nd order correction.
-            denoised = get_denoised(net, x_next, t_n, class_labels=class_labels, condition=condition, unconditional_condition=unconditional_condition)
-            
-            d_prime = (x_next - denoised) / t_n
-            x_cur = x_cur + (t_n - t_c) * (0.5 * d_cur + 0.5 * d_prime)
-        x_next = x_cur
+        # Heun (explicit trapezoidal) step: one Euler proposal + one correction.
+        x_euler = x_cur + (t_next - t_cur) * d_cur
+        denoised_next = get_denoised(
+            net,
+            x_euler,
+            t_next,
+            class_labels=class_labels,
+            condition=condition,
+            unconditional_condition=unconditional_condition,
+        )
+        d_prime = (x_euler - denoised_next) / t_next
+        x_next = x_cur + (t_next - t_cur) * (0.5 * d_cur + 0.5 * d_prime)
         x_list.append(x_next)
 
         if return_inters:
-            inters.append(x_cur.unsqueeze(0))
+            inters.append(x_next.unsqueeze(0))
 
     if denoise_to_zero:
         x_next = get_denoised(net, x_next, t_next, class_labels=class_labels, condition=condition, unconditional_condition=unconditional_condition)
@@ -621,9 +640,10 @@ def ipndm_sampler(
 
     # Time step discretization.
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
+    backend_type = getattr(net, "backend", None)
 
     # Main sampling loop.
-    x_next = latents * t_steps[0]
+    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
     if not train:
         buffer_model = []
@@ -765,29 +785,51 @@ def edm_sampler(
 ):
     device = latents.device
     dtype = latents.dtype
+    backend_type = getattr(net, "backend", None)
+    round_sigma = getattr(net, "round_sigma", lambda x: x)
 
-    sigma_min = max(sigma_min, getattr(net, "sigma_min", sigma_min))
-    sigma_max = min(sigma_max, getattr(net, "sigma_max", sigma_max))
+    if backend_type == "sd3" and schedule_type == "flowmatch":
+        # Use SD3 flowmatch schedule from backend for compatibility with SD3 training.
+        t_steps = net.make_flowmatch_schedule(num_steps, device=device)
+        t_steps = torch.cat([t_steps, torch.zeros_like(t_steps[:1])])
+        x_next = latents.to(dtype)
+    else:
+        sigma_min = max(sigma_min, getattr(net, "sigma_min", sigma_min))
+        sigma_max = min(sigma_max, getattr(net, "sigma_max", sigma_max))
 
-    step_indices = torch.arange(num_steps, dtype=torch.float64, device=device)
-    rho = schedule_rho
-    t_steps = (
-        sigma_max ** (1 / rho)
-        + step_indices / (num_steps - 1) * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
-    ) ** rho
-    t_steps = torch.cat([net.round_sigma(t_steps), torch.zeros_like(t_steps[:1])])
+        step_indices = torch.arange(num_steps, dtype=torch.float64, device=device)
+        rho = schedule_rho
+        t_steps = (
+            sigma_max ** (1 / rho)
+            + step_indices / (num_steps - 1) * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))
+        ) ** rho
+        t_steps = torch.cat([round_sigma(t_steps), torch.zeros_like(t_steps[:1])])
 
-    x_next = latents.to(torch.float64) * t_steps[0]
+        # For SD3, keep initial scaling consistent with flowmatch branch (no sigma multiply).
+        x_next = latents.to(dtype if backend_type == "sd3" else torch.float64)
+        if backend_type != "sd3":
+            x_next = x_next * t_steps[0]
 
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
         t_cur_val = float(t_cur)
         t_next_val = float(t_next)
 
-        gamma = min(S_churn / num_steps, np.sqrt(2) - 1) if (S_min <= t_cur <= S_max) else 0
-        t_hat = net.round_sigma(t_cur + gamma * t_cur)
-        t_hat_val = float(t_hat)
+        if backend_type == "sd3" and schedule_type == "flowmatch":
+            gamma = 0.0
+            t_hat = t_cur
+            t_hat_val = t_cur_val
+            noise = torch.zeros_like(x_next)
+        elif backend_type == "sd3":
+            gamma = 0.0
+            t_hat = t_cur
+            t_hat_val = t_cur_val
+            noise = torch.zeros_like(x_next)
+        else:
+            gamma = min(S_churn / num_steps, np.sqrt(2) - 1) if (S_min <= t_cur <= S_max) else 0
+            t_hat = round_sigma(t_cur + gamma * t_cur)
+            t_hat_val = float(t_hat)
+            noise = S_noise * torch.randn_like(x_next)
 
-        noise = S_noise * torch.randn_like(x_next)
         x_hat = x_next + (t_hat_val**2 - t_cur_val**2) ** 0.5 * noise
 
         t_hat_tensor = torch.full(
@@ -800,7 +842,7 @@ def edm_sampler(
             class_labels=class_labels,
             condition=condition,
             unconditional_condition=unconditional_condition,
-        ).to(torch.float64)
+        ).to(torch.float64 if backend_type != "sd3" else dtype)
 
         d_cur = (x_hat - denoised) / t_hat_val
         x_next = x_hat + (t_next_val - t_hat_val) * d_cur
@@ -816,7 +858,7 @@ def edm_sampler(
                 class_labels=class_labels,
                 condition=condition,
                 unconditional_condition=unconditional_condition,
-            ).to(torch.float64)
+            ).to(torch.float64 if backend_type != "sd3" else dtype)
             d_prime = (x_next - denoised_next) / t_next_val
             x_next = x_hat + (t_next_val - t_hat_val) * (0.5 * d_cur + 0.5 * d_prime)
 

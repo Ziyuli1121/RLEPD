@@ -28,6 +28,20 @@
 #     --max-order 3 \
 #     --outdir ./samples/444
 
+# python sample_baseline.py --sampler heun \
+#     --dataset-name ms_coco \
+#     --prompt-file src/prompts/test.txt \
+#     --seeds "0-999" --batch 16 \
+#     --num-steps 26 --schedule-type time_uniform --schedule-rho 1.0 \
+#     --outdir ./samples/test_heun_nfe50_uni
+
+# python sample_baseline.py --sampler heun \
+#     --dataset-name ms_coco \
+#     --prompt-file src/prompts/test.txt \
+#     --seeds "0-999" --batch 16 \
+#     --num-steps 26 --schedule-type polynomial --schedule-rho 1.0 \
+#     --outdir ./samples/test_heun_nfe50_poly
+
 # # sd1.5 epd
 # MASTER_PORT=29600 python sample.py \
 #     --predictor_path exps/20251118-151316-sd15_rl_base/export/network-snapshot-export-step000005.pkl \
@@ -37,27 +51,69 @@
 #     --outdir ./samples/ttt
 
 # # sd3 baseline
-# python sample_sd3_baseline.py --sampler sd3 \
+python sample_sd3_baseline.py --sampler sd3 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 28 \
+  --outdir ./samples/sd3_default
+
+python sample_sd3_baseline.py --sampler edm \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 15 \
+  --outdir ./samples/sd3_edm_flowmatch
+
+# python sample_sd3_baseline.py --sampler edm --schedule-type polynomial \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
 #   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 16 \
-#   --num-steps 28 \
-#   --outdir ./samples/sd3_baseline
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 15 \
+#   --outdir ./samples/sd3_edm_poly
+
+# python sample_sd3_baseline.py --sampler dpm2 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 15 \
+#   --outdir ./samples/sd3_dpm2_flowmatch
+
+# python sample_sd3_baseline.py --sampler dpm2 --schedule-type logsnr \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 15 \
+#   --outdir ./samples/sd3_dpm2_logsnr
+
+# python sample_sd3_baseline.py --sampler ipndm \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 29 \
+#   --outdir ./samples/sd3_ipndm_flowmatch
+
+# python sample_sd3_baseline.py --sampler ipndm --schedule-type time_uniform \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 29 \
+#   --outdir ./samples/sd3_ipndm_uniform
 
 # # sd3 epd
-# python sample_sd3.py \
-#   --predictor exps/fake-sd3-15/network-snapshot-000005.pkl \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" \
-#   --max-batch-size 4 \
-#   --outdir samples/sd3_epd_15
-
 # python sample_sd3.py \
 #   --predictor exps/fake-sd3-9/network-snapshot-000005.pkl \
 #   --prompt-file src/prompts/test.txt \
 #   --seeds "0-999" \
 #   --max-batch-size 4 \
 #   --outdir samples/sd3_epd_9
+
+# python sample_sd3.py \
+#   --predictor exps/20251123-215008-sd3_smoke/export/network-snapshot-export-step002900.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --max-batch-size 4 \
+#   --outdir samples/sd3_epd_9_2900
   
 # # sd3.5 baseline
 
@@ -70,67 +126,110 @@
 
 # # sd3.5 epd
 
-python sample_sd3.py \
-  --predictor exps/fake-sd35-15/network-snapshot-000005.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd35_epd_15
+# python sample_sd3.py \
+#   --predictor exps/fake-sd35-15/network-snapshot-000005.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --max-batch-size 4 \
+#   --outdir samples/sd35_epd_15
 
-python sample_sd3.py \
-  --predictor exps/fake-sd35-9/network-snapshot-000005.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd35_epd_9
+# python sample_sd3.py \
+#   --predictor exps/fake-sd35-9/network-snapshot-000005.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --max-batch-size 4 \
+#   --outdir samples/sd35_epd_9
+
 
 
 
 
 # evaluation
+# python -m training.ppo.scripts.score_clip \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/clip \
+#     --output-json results/test_heun_nfe50_uni_clip.json
+
+# python -m training.ppo.scripts.score_hps \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/HPS_v2.1_compressed.pt \
+#     --output-json results/test_heun_nfe50_uni_hps.json
+
+# python -m training.ppo.scripts.score_aesthetic \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/sac+logos+ava1-l14-linearMSE.pth \
+#     --output-json results/test_heun_nfe50_uni_aesthetic.json
+
+# python -m training.ppo.scripts.score_pick \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/PickScore_v1 \
+#     --output-json results/test_heun_nfe50_uni_pick.json
+
+# python -m training.ppo.scripts.score_imagereward \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/ImageReward-v1.0.pt \
+#     --output-json results/test_heun_nfe50_uni_imagereward.json
+
+# python -m training.ppo.scripts.score_mps \
+#     --images samples/test_heun_nfe50_uni \
+#     --pattern "**/*.png" \
+#     --prompts src/prompts/test.txt \
+#     --weights weights/MPS_overall_checkpoint.pth \
+#     --output-json results/test_heun_nfe50_uni_mps.json
+
+####################
+
 python -m training.ppo.scripts.score_clip \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/clip \
-    --output-json results/sd35_baseline_clip.json
+    --output-json results/sd3_epd_9_2900_clip.json
 
 python -m training.ppo.scripts.score_hps \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/HPS_v2.1_compressed.pt \
-    --output-json results/sd35_baseline_hps.json
+    --output-json results/sd3_epd_9_2900_hps.json
 
 python -m training.ppo.scripts.score_aesthetic \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/sac+logos+ava1-l14-linearMSE.pth \
-    --output-json results/sd35_baseline_aesthetic.json
+    --output-json results/sd3_epd_9_2900_aesthetic.json
 
 python -m training.ppo.scripts.score_pick \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/PickScore_v1 \
-    --output-json results/sd35_baseline_pick.json
+    --output-json results/sd3_epd_9_2900_pick.json
 
 python -m training.ppo.scripts.score_imagereward \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/ImageReward-v1.0.pt \
-    --output-json results/sd35_baseline_imagereward.json
+    --output-json results/sd3_epd_9_2900_imagereward.json
 
 python -m training.ppo.scripts.score_mps \
-    --images samples/sd35_baseline \
+    --images samples/sd3_epd_9_2900 \
     --pattern "**/*.png" \
     --prompts src/prompts/test.txt \
     --weights weights/MPS_overall_checkpoint.pth \
-    --output-json results/sd35_baseline_mps.json
-
-
+    --output-json results/sd3_epd_9_2900_mps.json
 
 
 # visualize dirichlet

@@ -16,7 +16,9 @@ from typing import List, Sequence
 import click
 import torch
 from torchvision.utils import make_grid, save_image
-from diffusers import StableDiffusion3Pipeline
+
+from sample import create_model_sd3
+from training.loss import get_solver_fn
 
 
 # -----------------------------------------------------------------------------
@@ -82,10 +84,10 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
 @click.command()
 @click.option(
     "--sampler",
-    type=click.Choice(["sd3"], case_sensitive=False),
+    type=click.Choice(["sd3", "flowmatch", "edm", "dpm", "dpm2", "ipndm"], case_sensitive=False),
     default="sd3",
     show_default=True,
-    help="Sampler backend (fixed to SD3 FlowMatch Euler).",
+    help="Sampler backend (flowmatch=official SD3 Euler; edm/dpm/dpm2/ipndm use RLEPD solvers).",
 )
 @click.option("--num-steps", type=int, default=28, show_default=True, help="Number of inference steps.")
 @click.option("--batch", "max_batch_size", type=click.IntRange(min=1), default=4, show_default=True)
@@ -112,6 +114,12 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
     default=True,
     help="Create subdirectory for every 1000 seeds (mirrors sample_baseline).",
 )
+@click.option("--schedule-type", type=str, default="flowmatch", show_default=True, help="Time schedule type.")
+@click.option("--schedule-rho", type=float, default=7.0, show_default=True, help="Schedule rho/exponent.")
+@click.option("--guidance-rate", type=float, default=4.5, show_default=True, help="Classifier-free guidance scale.")
+@click.option("--afs", is_flag=True, default=False, help="Apply AFS on first step (for dpm/ipndm).")
+@click.option("--max-order", type=int, default=4, show_default=True, help="Max order for IPNDM.")
+@click.option("--inner-steps", type=int, default=None, help="Inner steps for DPM (default 2).")
 def main(
     sampler: str,
     num_steps: int,
@@ -123,15 +131,31 @@ def main(
     grid: bool,
     subdirs: bool,
     model_id: str,
+    schedule_type: str,
+    schedule_rho: float,
+    guidance_rate: float,
+    afs: bool,
+    max_order: int,
+    inner_steps: int | None,
 ) -> None:
+    sampler_choice = sampler.lower()
+    sampler_mode = "flowmatch" if sampler_choice in ["sd3", "flowmatch"] else sampler_choice
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    pipe = StableDiffusion3Pipeline.from_pretrained(
-        model_id,
-        torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
+    backend_cfg = {"model_id": model_id, "model_name_or_path": model_id}
+    backend, _ = create_model_sd3(
+        guidance_rate=guidance_rate,
+        device=device,
+        backend_config=backend_cfg,
     )
-    pipe.to(device)
+    if not hasattr(backend, "round_sigma"):
+        backend.round_sigma = lambda x: x  # EDM fallback for SD3 backend
+    pipe = backend.pipeline
     pipe.set_progress_bar_config(disable=True)
+
+    solver_fn = None if sampler_mode == "flowmatch" else get_solver_fn(sampler_mode)
+    if sampler_mode == "edm" and schedule_rho == 1.0:
+        schedule_rho = 7.0
 
     seeds_tensor = torch.as_tensor(seeds)
     num_batches = ((len(seeds) - 1) // max_batch_size) + 1
@@ -145,18 +169,55 @@ def main(
         batch_prompts = prompts[
             batch_idx * batch_seeds.numel() : batch_idx * batch_seeds.numel() + batch_seeds.numel()
         ]
-        gen = [torch.Generator(device).manual_seed(int(s.item()) % (1 << 32)) for s in batch_seeds]
-
-        with torch.no_grad(), torch.cuda.amp.autocast():  # autocast no-op on CPU
-            result = pipe(
-                prompt=batch_prompts,
-                negative_prompt=[""] * len(batch_prompts),
-                num_inference_steps=num_steps,
-                guidance_scale=4.5,
-                generator=gen,
-                output_type="pt",
+        if sampler_mode == "flowmatch":
+            gen = [torch.Generator(device).manual_seed(int(s.item()) % (1 << 32)) for s in batch_seeds]
+            with torch.no_grad(), torch.cuda.amp.autocast():  # autocast no-op on CPU
+                result = pipe(
+                    prompt=batch_prompts,
+                    negative_prompt=[""] * len(batch_prompts),
+                    num_inference_steps=num_steps,
+                    guidance_scale=guidance_rate,
+                    generator=gen,
+                    output_type="pt",
+                )
+            images = torch.clamp(result.images, 0, 1)
+        else:
+            rnd = StackedRandomGenerator(device, batch_seeds)
+            latents = rnd.randn(
+                [len(batch_seeds), backend.img_channels, backend.img_resolution, backend.img_resolution],
+                device=device,
+                dtype=pipe.transformer.dtype,
             )
-        images = torch.clamp(result.images, 0, 1)
+            negative_prompt = [""] * len(batch_prompts) if guidance_rate > 1.0 else None
+            condition = backend.prepare_condition(
+                prompt=batch_prompts,
+                negative_prompt=negative_prompt,
+                guidance_scale=guidance_rate,
+            )
+            solver_kwargs = dict(
+                num_steps=num_steps,
+                sigma_min=backend.sigma_min,
+                sigma_max=backend.sigma_max,
+                schedule_type=schedule_type,
+                schedule_rho=schedule_rho,
+                afs=afs,
+                predictor=None,
+                train=False,
+            )
+            if sampler_mode == "dpm":
+                solver_kwargs["inner_steps"] = inner_steps if inner_steps is not None else 2
+            if sampler_mode == "ipndm":
+                solver_kwargs["max_order"] = max_order
+
+            with torch.no_grad():
+                samples, _ = solver_fn(
+                    net=backend,
+                    latents=latents,
+                    condition=condition,
+                    **solver_kwargs,
+                )
+                images = backend.vae_decode(samples)
+                images = torch.clamp(images / 2 + 0.5, 0, 1)
 
         if grid:
             grid_img = make_grid(images, nrow=int(len(images) ** 0.5) or 1, padding=0)
