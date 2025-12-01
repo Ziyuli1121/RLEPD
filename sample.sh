@@ -55,49 +55,49 @@ python sample_sd3_baseline.py --sampler sd3 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 28 \
-  --outdir ./samples/sd3_default
+  --num-steps 16 \
+  --outdir ./samples/sd3_default_16
 
 python sample_sd3_baseline.py --sampler edm \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 15 \
-  --outdir ./samples/sd3_edm_flowmatch
+  --num-steps 8 \
+  --outdir ./samples/sd3_edm_flowmatch_16
 
 # python sample_sd3_baseline.py --sampler edm --schedule-type polynomial \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
 #   --prompt-file src/prompts/test.txt \
 #   --seeds "0-999" --batch 8 \
-#   --num-steps 15 \
+#   --num-steps 8 \
 #   --outdir ./samples/sd3_edm_poly
 
-# python sample_sd3_baseline.py --sampler dpm2 \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 15 \
-#   --outdir ./samples/sd3_dpm2_flowmatch
+python sample_sd3_baseline.py --sampler dpm2 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 8 \
+  --outdir ./samples/sd3_dpm2_flowmatch_16
 
 # python sample_sd3_baseline.py --sampler dpm2 --schedule-type logsnr \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
 #   --prompt-file src/prompts/test.txt \
 #   --seeds "0-999" --batch 8 \
-#   --num-steps 15 \
+#   --num-steps 8 \
 #   --outdir ./samples/sd3_dpm2_logsnr
 
-# python sample_sd3_baseline.py --sampler ipndm \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 29 \
-#   --outdir ./samples/sd3_ipndm_flowmatch
+python sample_sd3_baseline.py --sampler ipndm \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 16 \
+  --outdir ./samples/sd3_ipndm_flowmatch_16
 
 # python sample_sd3_baseline.py --sampler ipndm --schedule-type time_uniform \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
 #   --prompt-file src/prompts/test.txt \
 #   --seeds "0-999" --batch 8 \
-#   --num-steps 29 \
+#   --num-steps 16 \
 #   --outdir ./samples/sd3_ipndm_uniform
 
 # # sd3 epd
@@ -189,48 +189,73 @@ python sample_sd3_baseline.py --sampler edm \
 
 ####################
 
-python -m training.ppo.scripts.score_clip \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/clip \
-    --output-json results/sd3_epd_9_2900_clip.json
+score_all_metrics() {
+    local name="$1"
+    if [ -z "$name" ]; then
+        echo "Usage: score_all_metrics <images_subdir_under_samples>"
+        return 1
+    fi
 
-python -m training.ppo.scripts.score_hps \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/HPS_v2.1_compressed.pt \
-    --output-json results/sd3_epd_9_2900_hps.json
+    local image_dir="samples/${name}"
+    local prefix="${name}"
 
-python -m training.ppo.scripts.score_aesthetic \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/sac+logos+ava1-l14-linearMSE.pth \
-    --output-json results/sd3_epd_9_2900_aesthetic.json
+    mkdir -p results
 
-python -m training.ppo.scripts.score_pick \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/PickScore_v1 \
-    --output-json results/sd3_epd_9_2900_pick.json
+    python -m training.ppo.scripts.score_clip \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/clip \
+        --output-json "results/${prefix}_clip.json"
 
-python -m training.ppo.scripts.score_imagereward \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/ImageReward-v1.0.pt \
-    --output-json results/sd3_epd_9_2900_imagereward.json
+    python -m training.ppo.scripts.score_hps \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/HPS_v2.1_compressed.pt \
+        --output-json "results/${prefix}_hps.json"
 
-python -m training.ppo.scripts.score_mps \
-    --images samples/sd3_epd_9_2900 \
-    --pattern "**/*.png" \
-    --prompts src/prompts/test.txt \
-    --weights weights/MPS_overall_checkpoint.pth \
-    --output-json results/sd3_epd_9_2900_mps.json
+    python -m training.ppo.scripts.score_aesthetic \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/sac+logos+ava1-l14-linearMSE.pth \
+        --output-json "results/${prefix}_aesthetic.json"
 
+    python -m training.ppo.scripts.score_pick \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/PickScore_v1 \
+        --output-json "results/${prefix}_pick.json"
+
+    python -m training.ppo.scripts.score_imagereward \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/ImageReward-v1.0.pt \
+        --output-json "results/${prefix}_imagereward.json"
+
+    python -m training.ppo.scripts.score_mps \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts src/prompts/test.txt \
+        --weights weights/MPS_overall_checkpoint.pth \
+        --output-json "results/${prefix}_mps.json"
+}
+
+# Change the name below to score a different folder under samples/.
+score_all_metrics sd3_default_16
+sleep 5
+
+score_all_metrics sd3_edm_flowmatch_16
+sleep 5
+
+score_all_metrics sd3_dpm2_flowmatch_16
+sleep 5
+
+score_all_metrics sd3_ipndm_flowmatch_16
+sleep 5
 
 # visualize dirichlet
 # python visualize_dirichlet.py \
