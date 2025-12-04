@@ -1,10 +1,10 @@
 run:
   output_root: "exps"
-  run_name: "sd3_smoke"
+  run_name: "sd3_1024"
   seed: 0
 
 data:
-  predictor_snapshot: "exps/fake-sd3-9/network-snapshot-000005.pkl"
+  predictor_snapshot: "exps/fake-sd3-9-1024/network-snapshot-000005.pkl"
   prompt_csv: null  # reuse MS-COCO prompts; adjust if you have custom prompt files
 
 model:
@@ -18,6 +18,7 @@ model:
   backend: "sd3"
   sigma_min: null
   sigma_max: null
+  resolution: 1024  # Allowed: 512 or 1024
   backend_options:
     model_name_or_path: null
     torch_dtype: null
@@ -50,19 +51,19 @@ reward:
       clip_path: "weights/clip"
 
 ppo:
-  rollout_batch_size: 64
+  rollout_batch_size: 8
   rloo_k: 4
   ppo_epochs: 1
   minibatch_size: 4
-  learning_rate: 2.0e-4
+  learning_rate: 3.0e-5
   clip_range: 0.2
   kl_coef: 0.0
   entropy_coef: 0.0
   max_grad_norm: 1.0
   decode_rgb: true
   steps: 99999
-  dirichlet_concentration: 10.0
+  dirichlet_concentration: 20.0
 
 logging:
   log_interval: 1
-  save_interval: 50
+  save_interval: 100

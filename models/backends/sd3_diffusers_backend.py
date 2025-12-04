@@ -82,12 +82,16 @@ class SD3DiffusersBackend(nn.Module):
         token: Optional[str] = None,
         pipeline_kwargs: Optional[dict] = None,
         flowmatch_mu: Optional[float] = None,
+        resolution: int = 1024,
     ) -> None:
         super().__init__()
+        if resolution not in (512, 1024):
+            raise ValueError(f"resolution must be 512 or 1024 for SD3; got {resolution}")
         self.default_guidance_scale = float(guidance_scale)
         self.max_sequence_length = max_sequence_length
         self.clip_skip = clip_skip
         self.device = torch.device(device) if isinstance(device, str) else device
+        self.requested_resolution = int(resolution)
 
         load_kwargs = {
             "torch_dtype": torch_dtype,
@@ -125,11 +129,19 @@ class SD3DiffusersBackend(nn.Module):
 
         # Public attributes consumed by sampler/sample.py.
         transformer_cfg = self.pipeline.transformer.config
-        self.img_resolution = transformer_cfg.sample_size
+        vae_sf = getattr(self.pipeline, "vae_scale_factor", None)
+        if vae_sf is None:
+            # Fallback: most SD pipelines downsample by 8.
+            vae_sf = 8
+        self.output_resolution = self.requested_resolution
+        if self.output_resolution % vae_sf != 0:
+            raise ValueError(f"resolution {self.output_resolution} must be divisible by VAE scale factor {vae_sf}")
+        self.latent_resolution = self.output_resolution // vae_sf
+        self.img_resolution = self.latent_resolution  # legacy field used for latent shapes
         self.img_channels = transformer_cfg.in_channels
         self.label_dim = False
         self.backend = "sd3"
-        self.backend_config = {}
+        self.backend_config = {"resolution": self.output_resolution, "latent_resolution": self.latent_resolution}
 
         scheduler = self.pipeline.scheduler
         self.sigma_min = float(getattr(scheduler, "sigma_min", 0.0))

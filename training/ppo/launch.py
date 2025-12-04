@@ -181,6 +181,7 @@ def enrich_model_dimensions(full_config: cfg.FullConfig, dry_run: bool) -> Dict[
     _override("sigma_max", "sigma_max")
     _override("flowmatch_mu", "flowmatch_mu")
     _override("flowmatch_shift", "flowmatch_shift")
+    _override("resolution", "resolution")
 
     backend_cfg_meta = meta.get("backend_config") if isinstance(meta, dict) else None
     if isinstance(backend_cfg_meta, dict) and backend_cfg_meta:
@@ -287,6 +288,8 @@ def main(argv: Optional[List[str]] = None) -> None:
             backend_config.setdefault("flowmatch_mu", full_config.model.flowmatch_mu)
         if full_config.model.flowmatch_shift is not None:
             backend_config.setdefault("flowmatch_shift", full_config.model.flowmatch_shift)
+        if full_config.model.resolution is not None:
+            backend_config.setdefault("resolution", full_config.model.resolution)
 
         net, model_source = create_model_backend(
             dataset_name=full_config.model.dataset_name,
@@ -296,6 +299,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             backend_config=backend_config,
             device=device,
         )
+        full_config.model.backend_options = backend_config
         if is_master:
             print("[Launch] Stable Diffusion model loaded.")
         net = net.to(device)

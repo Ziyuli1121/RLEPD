@@ -51,19 +51,19 @@
 #     --outdir ./samples/ttt
 
 # # sd3 baseline
-python sample_sd3_baseline.py --sampler sd3 \
+python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
   --num-steps 16 \
-  --outdir ./samples/sd3_default_16
+  --outdir ./samples/sd3_default_16_512
 
-python sample_sd3_baseline.py --sampler edm \
+python sample_sd3_baseline.py --sampler edm --resolution 512 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 8 \
-  --outdir ./samples/sd3_edm_flowmatch_16
+  --num-steps 9 \
+  --outdir ./samples/sd3_edm_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler edm --schedule-type polynomial \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -72,12 +72,12 @@ python sample_sd3_baseline.py --sampler edm \
 #   --num-steps 8 \
 #   --outdir ./samples/sd3_edm_poly
 
-python sample_sd3_baseline.py --sampler dpm2 \
+python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 8 \
-  --outdir ./samples/sd3_dpm2_flowmatch_16
+  --num-steps 9 \
+  --outdir ./samples/sd3_dpm2_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler dpm2 --schedule-type logsnr \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -86,12 +86,12 @@ python sample_sd3_baseline.py --sampler dpm2 \
 #   --num-steps 8 \
 #   --outdir ./samples/sd3_dpm2_logsnr
 
-python sample_sd3_baseline.py --sampler ipndm \
+python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
   --num-steps 16 \
-  --outdir ./samples/sd3_ipndm_flowmatch_16
+  --outdir ./samples/sd3_ipndm_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler ipndm --schedule-type time_uniform \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -114,6 +114,13 @@ python sample_sd3_baseline.py --sampler ipndm \
 #   --seeds "0-999" \
 #   --max-batch-size 4 \
 #   --outdir samples/sd3_epd_9_2900
+
+python sample_sd3.py \
+  --predictor exps/20251201-145511-sd3_512/export/network-snapshot-export-step002000.pkl \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" \
+  --max-batch-size 1 \
+  --outdir samples/sd3_epd_9_512_2000
   
 # # sd3.5 baseline
 
@@ -133,61 +140,7 @@ python sample_sd3_baseline.py --sampler ipndm \
 #   --max-batch-size 4 \
 #   --outdir samples/sd35_epd_15
 
-# python sample_sd3.py \
-#   --predictor exps/fake-sd35-9/network-snapshot-000005.pkl \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" \
-#   --max-batch-size 4 \
-#   --outdir samples/sd35_epd_9
 
-
-
-
-
-# evaluation
-# python -m training.ppo.scripts.score_clip \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/clip \
-#     --output-json results/test_heun_nfe50_uni_clip.json
-
-# python -m training.ppo.scripts.score_hps \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/HPS_v2.1_compressed.pt \
-#     --output-json results/test_heun_nfe50_uni_hps.json
-
-# python -m training.ppo.scripts.score_aesthetic \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/sac+logos+ava1-l14-linearMSE.pth \
-#     --output-json results/test_heun_nfe50_uni_aesthetic.json
-
-# python -m training.ppo.scripts.score_pick \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/PickScore_v1 \
-#     --output-json results/test_heun_nfe50_uni_pick.json
-
-# python -m training.ppo.scripts.score_imagereward \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/ImageReward-v1.0.pt \
-#     --output-json results/test_heun_nfe50_uni_imagereward.json
-
-# python -m training.ppo.scripts.score_mps \
-#     --images samples/test_heun_nfe50_uni \
-#     --pattern "**/*.png" \
-#     --prompts src/prompts/test.txt \
-#     --weights weights/MPS_overall_checkpoint.pth \
-#     --output-json results/test_heun_nfe50_uni_mps.json
-
-####################
 
 score_all_metrics() {
     local name="$1"
@@ -245,17 +198,9 @@ score_all_metrics() {
 }
 
 # Change the name below to score a different folder under samples/.
-score_all_metrics sd3_default_16
-sleep 5
+sleep 3
+score_all_metrics sd3_epd_9_512_2000
 
-score_all_metrics sd3_edm_flowmatch_16
-sleep 5
-
-score_all_metrics sd3_dpm2_flowmatch_16
-sleep 5
-
-score_all_metrics sd3_ipndm_flowmatch_16
-sleep 5
 
 # visualize dirichlet
 # python visualize_dirichlet.py \

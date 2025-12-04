@@ -10,3 +10,4 @@ __pycache__/
 */__pycache__/
 **/__pycache__/
 exp_visuals/
+test_samples/

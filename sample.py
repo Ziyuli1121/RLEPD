@@ -139,6 +139,9 @@ def create_model_sd3(
     variant = cfg.get("variant")
     use_safetensors = cfg.get("use_safetensors", True)
     token = cfg.get("token")
+    resolution = int(cfg.get("resolution", 1024) or 1024)
+    if resolution not in (512, 1024):
+        raise ValueError(f"SD3 resolution must be 512 or 1024, got {resolution}")
     pipeline_kwargs = cfg.get("pipeline_kwargs") if isinstance(cfg.get("pipeline_kwargs"), dict) else None
     flowmatch_mu = cfg.get("flowmatch_mu")
 
@@ -156,6 +159,7 @@ def create_model_sd3(
         token=token,
         pipeline_kwargs=pipeline_kwargs,
         flowmatch_mu=flowmatch_mu,
+        resolution=resolution,
     )
     backend.backend_config = dict(cfg)
     if "flowmatch_mu" not in backend.backend_config and backend.default_flowmatch_mu is not None:
@@ -163,6 +167,8 @@ def create_model_sd3(
     backend.backend_config.setdefault("flowmatch_shift", backend.flow_shift)
     backend.backend_config.setdefault("sigma_min", backend.sigma_min)
     backend.backend_config.setdefault("sigma_max", backend.sigma_max)
+    backend.backend_config.setdefault("resolution", resolution)
+    backend.backend_config.setdefault("latent_resolution", getattr(backend, "latent_resolution", None))
     return backend, "sd3"
 
 

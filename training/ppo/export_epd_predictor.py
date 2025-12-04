@@ -235,7 +235,20 @@ def _prepare_pred_kwargs(
         raise ExportError("model.backend_options must be a mapping when provided.")
     else:
         backend_options = dict(backend_options)
+    res_meta = model_cfg.get("resolution") if isinstance(model_cfg, Mapping) else None
+    if res_meta is not None:
+        try:
+            backend_options.setdefault("resolution", int(res_meta))
+        except Exception:
+            raise ExportError("model.resolution must be an integer when provided.")
     pred_kwargs["backend_config"] = backend_options
+    if res_meta is None:
+        res_meta = backend_options.get("resolution")
+    if res_meta is not None:
+        try:
+            pred_kwargs["img_resolution"] = int(res_meta)
+        except Exception:
+            raise ExportError("model.resolution must be an integer when provided.")
     return pred_kwargs
 
 

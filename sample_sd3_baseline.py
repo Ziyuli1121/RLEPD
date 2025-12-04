@@ -118,8 +118,15 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
 @click.option("--schedule-rho", type=float, default=7.0, show_default=True, help="Schedule rho/exponent.")
 @click.option("--guidance-rate", type=float, default=4.5, show_default=True, help="Classifier-free guidance scale.")
 @click.option("--afs", is_flag=True, default=False, help="Apply AFS on first step (for dpm/ipndm).")
-@click.option("--max-order", type=int, default=4, show_default=True, help="Max order for IPNDM.")
+@click.option("--max-order", type=int, default=3, show_default=True, help="Max order for IPNDM.")
 @click.option("--inner-steps", type=int, default=None, help="Inner steps for DPM (default 2).")
+@click.option(
+    "--resolution",
+    type=click.Choice(["512", "1024"], case_sensitive=False),
+    default="1024",
+    show_default=True,
+    help="Square image resolution.",
+)
 def main(
     sampler: str,
     num_steps: int,
@@ -137,12 +144,14 @@ def main(
     afs: bool,
     max_order: int,
     inner_steps: int | None,
+    resolution: str,
 ) -> None:
     sampler_choice = sampler.lower()
     sampler_mode = "flowmatch" if sampler_choice in ["sd3", "flowmatch"] else sampler_choice
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    target_resolution = int(resolution)
 
-    backend_cfg = {"model_id": model_id, "model_name_or_path": model_id}
+    backend_cfg = {"model_id": model_id, "model_name_or_path": model_id, "resolution": target_resolution}
     backend, _ = create_model_sd3(
         guidance_rate=guidance_rate,
         device=device,
@@ -178,6 +187,8 @@ def main(
                     num_inference_steps=num_steps,
                     guidance_scale=guidance_rate,
                     generator=gen,
+                    height=target_resolution,
+                    width=target_resolution,
                     output_type="pt",
                 )
             images = torch.clamp(result.images, 0, 1)

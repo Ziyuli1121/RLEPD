@@ -94,6 +94,7 @@ class ModelConfig:
     num_steps: Optional[int] = None
     num_points: Optional[int] = None
     backend: str = "ldm"
+    resolution: Optional[int] = None
     backend_options: Dict[str, Any] = field(default_factory=dict)
     sigma_min: Optional[float] = None
     sigma_max: Optional[float] = None
@@ -274,6 +275,8 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
     if not isinstance(backend_options_raw, dict):
         raise ConfigError("model.backend_options must be a mapping when provided.")
     backend_options = copy.deepcopy(backend_options_raw)
+    if model_raw.get("resolution") is not None:
+        backend_options.setdefault("resolution", int(model_raw["resolution"]))
 
     model = ModelConfig(
         dataset_name=str(model_raw.get("dataset_name", "ms_coco")),
@@ -284,6 +287,7 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         num_steps=model_raw.get("num_steps"),
         num_points=model_raw.get("num_points"),
         backend=backend_value,
+        resolution=int(model_raw["resolution"]) if model_raw.get("resolution") is not None else None,
         backend_options=backend_options,
         sigma_min=float(model_raw["sigma_min"]) if model_raw.get("sigma_min") is not None else None,
         sigma_max=float(model_raw["sigma_max"]) if model_raw.get("sigma_max") is not None else None,
@@ -392,6 +396,12 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
 
 
 def validate_config(config: FullConfig, check_paths: bool = True) -> None:
+    if config.model.backend.lower() == "sd3":
+        res = config.model.resolution
+        if res is None:
+            res = config.model.backend_options.get("resolution") if isinstance(config.model.backend_options, dict) else None
+        if res is not None and res not in (512, 1024):
+            raise ConfigError("SD3 resolution must be 512 or 1024.")
     if config.ppo.rollout_batch_size <= 0:
         raise ConfigError("rollout_batch_size must be positive.")
     if config.ppo.rollout_batch_size % config.ppo.rloo_k != 0:

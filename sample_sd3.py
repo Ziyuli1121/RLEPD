@@ -99,6 +99,12 @@ def _load_predictor(path: Path, device: torch.device) -> EPD_predictor:
 @click.option("--outdir", type=str, default="./samples/sd3_epd", show_default=True, help="Output directory.")
 @click.option("--grid", is_flag=True, default=False, help="Save grid per batch.")
 @click.option("--max-batch-size", type=click.IntRange(min=1), default=4, show_default=True, help="Batch size.")
+@click.option(
+    "--resolution",
+    type=click.Choice(["512", "1024"], case_sensitive=False),
+    default=None,
+    help="Override resolution; defaults to predictor/back-end config.",
+)
 def main(
     predictor: str,
     seeds: List[int],
@@ -107,18 +113,30 @@ def main(
     outdir: str,
     grid: bool,
     max_batch_size: int,
+    resolution: str | None,
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     predictor_path = Path(predictor)
     predictor_module = _load_predictor(predictor_path, device=device)
 
+    cli_resolution: int | None = int(resolution) if resolution is not None else None
+    predictor_resolution = getattr(predictor_module, "img_resolution", None)
     backend_cfg = {}
     if isinstance(getattr(predictor_module, "backend_config", None), dict):
         backend_cfg = dict(predictor_module.backend_config)
     backend_cfg.setdefault("flowmatch_mu", getattr(predictor_module, "flowmatch_mu", None))
     backend_cfg.setdefault("sigma_min", getattr(predictor_module, "sigma_min", None))
     backend_cfg.setdefault("sigma_max", getattr(predictor_module, "sigma_max", None))
+    if cli_resolution is not None and predictor_resolution is not None and cli_resolution != predictor_resolution:
+        raise RuntimeError(
+            f"Resolution override ({cli_resolution}) does not match predictor metadata ({predictor_resolution})."
+        )
+    cfg_resolution = backend_cfg.get("resolution")
+    if cfg_resolution is not None:
+        cfg_resolution = int(cfg_resolution)
+    resolved_resolution = cli_resolution or cfg_resolution or predictor_resolution or 1024
+    backend_cfg["resolution"] = int(resolved_resolution)
 
     backend, _ = create_model_sd3(
         guidance_rate=predictor_module.guidance_rate,
@@ -142,6 +160,7 @@ def main(
         "flowmatch_mu": backend.resolve_flowmatch_mu(override=backend_cfg.get("flowmatch_mu")),
         "flowmatch_shift": backend.flow_shift,
         "backend": backend.backend,
+        "resolution": getattr(backend, "output_resolution", backend.img_resolution),
         "backend_config": backend.backend_config,
     }
     print("[sampler] configuration:")

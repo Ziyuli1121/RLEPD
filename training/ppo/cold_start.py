@@ -397,6 +397,8 @@ def _load_table_from_pkl(
         "lower_order_final": _get_attr(predictor, "lower_order_final", None),
         "backend": backend_name,
         "backend_config": backend_config,
+        "img_resolution": _get_attr(predictor, "img_resolution", None),
+        "resolution": _get_attr(predictor, "img_resolution", None),
         "sanitized": bool(reordered_rows.any() or adjusted_rows.any()),
         "sanitized_rows": int(np.count_nonzero(reordered_rows | adjusted_rows)),
     }

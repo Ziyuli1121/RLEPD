@@ -56,6 +56,7 @@ class SnapshotConfig:
     sigma_max: Optional[float] = None
     flowmatch_mu: Optional[float] = None
     flowmatch_shift: Optional[float] = None
+    resolution: int = 1024
 
 
 def _positive_float(text: str) -> float:
@@ -196,6 +197,13 @@ def parse_args() -> argparse.Namespace:
         help="JSON object with backend-specific options (e.g., model IDs).",
     )
     parser.add_argument(
+        "--resolution",
+        type=int,
+        choices=[512, 1024],
+        default=1024,
+        help="Target image resolution for SD3 backends.",
+    )
+    parser.add_argument(
         "--sigma-min",
         type=_positive_float,
         default=None,
@@ -300,6 +308,7 @@ def _instantiate_predictor(config: SnapshotConfig) -> EPD_predictor:
     predictor = EPD_predictor(
         num_points=config.num_points,
         dataset_name=config.dataset_name,
+        img_resolution=config.resolution,
         num_steps=config.num_steps,
         sampler_stu=config.sampler_stu,
         sampler_tea=config.sampler_tea,
@@ -353,6 +362,7 @@ def _build_snapshot(
             "schedule_type": config.schedule_type,
             "schedule_rho": config.schedule_rho,
             "dataset_name": config.dataset_name,
+            "img_resolution": config.resolution,
             "scale_dir": config.scale_dir,
             "scale_time": config.scale_time,
             "fcn": config.fcn,
@@ -388,6 +398,7 @@ def main() -> None:
         backend_options.setdefault("flowmatch_mu", args.flowmatch_mu)
     if args.flowmatch_shift is not None:
         backend_options.setdefault("flowmatch_shift", args.flowmatch_shift)
+    backend_options.setdefault("resolution", args.resolution)
 
     outdir_raw = Path(args.outdir)
     outdir = outdir_raw.expanduser().resolve()
@@ -429,6 +440,7 @@ def main() -> None:
         sigma_max=args.sigma_max,
         flowmatch_mu=args.flowmatch_mu,
         flowmatch_shift=args.flowmatch_shift,
+        resolution=args.resolution,
     )
 
     positions = _build_positions(config)
