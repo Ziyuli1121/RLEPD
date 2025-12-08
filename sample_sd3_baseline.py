@@ -52,6 +52,29 @@ def parse_int_list(s):
     return ranges
 
 
+def flowmatch_euler_no_terminal(backend, latents, condition, t_steps: torch.Tensor) -> torch.Tensor:
+    """
+    FlowMatch Euler rollout without the final scheduler sigma=0 step.
+    """
+    x = latents
+    for t_cur, t_next in zip(t_steps[:-1], t_steps[1:]):
+        # SD3 backend expects scalar timesteps; keep scalar for the call, expand for arithmetic.
+        t_cur_scalar = t_cur.to(device=x.device, dtype=x.dtype)
+        if t_cur_scalar.ndim != 0:
+            t_cur_scalar = t_cur_scalar.reshape(())
+        t_next_scalar = t_next.to(device=x.device, dtype=x.dtype)
+        if t_next_scalar.ndim != 0:
+            t_next_scalar = t_next_scalar.reshape(())
+
+        denoised = backend(x, t_cur_scalar, condition=condition)
+
+        t_cur_b = t_cur_scalar.reshape(1, 1, 1, 1)
+        t_next_b = t_next_scalar.reshape(1, 1, 1, 1)
+        d_cur = (x - denoised) / t_cur_b
+        x = x + (t_next_b - t_cur_b) * d_cur
+    return x
+
+
 def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> List[str]:
     if prompt is not None:
         return [prompt] * count
@@ -127,6 +150,12 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
     show_default=True,
     help="Square image resolution.",
 )
+@click.option(
+    "--skip-final-flowmatch-step/--keep-final-flowmatch-step",
+    default=True,
+    show_default=True,
+    help="Drop the extra terminal sigma=0 step for SD3 FlowMatch Euler (diffusers baseline keeps it).",
+)
 def main(
     sampler: str,
     num_steps: int,
@@ -145,6 +174,7 @@ def main(
     max_order: int,
     inner_steps: int | None,
     resolution: str,
+    skip_final_flowmatch_step: bool,
 ) -> None:
     sampler_choice = sampler.lower()
     sampler_mode = "flowmatch" if sampler_choice in ["sd3", "flowmatch"] else sampler_choice
@@ -178,7 +208,25 @@ def main(
         batch_prompts = prompts[
             batch_idx * batch_seeds.numel() : batch_idx * batch_seeds.numel() + batch_seeds.numel()
         ]
-        if sampler_mode == "flowmatch":
+        if sampler_mode == "flowmatch" and skip_final_flowmatch_step:
+            rnd = StackedRandomGenerator(device, batch_seeds)
+            latents = rnd.randn(
+                [len(batch_seeds), backend.img_channels, backend.img_resolution, backend.img_resolution],
+                device=device,
+                dtype=pipe.transformer.dtype,
+            )
+            negative_prompt = [""] * len(batch_prompts) if guidance_rate > 1.0 else None
+            condition = backend.prepare_condition(
+                prompt=batch_prompts,
+                negative_prompt=negative_prompt,
+                guidance_scale=guidance_rate,
+            )
+            t_steps = backend.make_flowmatch_schedule(num_steps, device=device)
+            with torch.no_grad():
+                samples = flowmatch_euler_no_terminal(backend, latents, condition, t_steps)
+                images = backend.vae_decode(samples)
+                images = torch.clamp(images / 2 + 0.5, 0, 1)
+        elif sampler_mode == "flowmatch":
             gen = [torch.Generator(device).manual_seed(int(s.item()) % (1 << 32)) for s in batch_seeds]
             with torch.no_grad(), torch.cuda.amp.autocast():  # autocast no-op on CPU
                 result = pipe(

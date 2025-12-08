@@ -4,7 +4,7 @@ run:
   seed: 0
 
 data:
-  predictor_snapshot: "exps/fake-sd3-9-1024/network-snapshot-000005.pkl"
+  predictor_snapshot: "exps/fake-sd3-11-1024/network-snapshot-000005.pkl"
   prompt_csv: null  # reuse MS-COCO prompts; adjust if you have custom prompt files
 
 model:

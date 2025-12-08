@@ -30,8 +30,8 @@ python -m training.ppo.export_epd_predictor \
 
 # sd3
 python fake_train.py \
-  --outdir exps/fake-sd3-9-1024 \
-  --num-steps 11 \
+  --outdir exps/fake-sd3-11-1024 \
+  --num-steps 12 \
   --num-points 2 \
   --guidance-rate 4.5 \
   --schedule-type flowmatch \
@@ -40,25 +40,25 @@ python fake_train.py \
   --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3-medium-diffusers"}'
 
 
-torchrun --master_port=54321 --nproc_per_node=1 -m training.ppo.launch \
+torchrun --master_port=33333 --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd3_1024.yaml
 
-# /work/nvme/betk/zli42/RLEPD/exps/20251202-213549-sd3_1024/logs/metrics.jsonl
+# /work/nvme/betk/zli42/RLEPD/exps/20251204-144911-sd3_1024/logs/metrics.jsonl
 # /work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512/logs/metrics.jsonl
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251206-131339-sd3_1024/logs/metrics.jsonl \
     --metrics hps_mean \
-    --smooth-window 800 \
-    --output exp_visuals/sd3_512/hps_mean.png
+    --smooth-window 2000 \
+    --output exp_visuals/sd3_1024_2/hps_mean.png
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251206-131339-sd3_1024/logs/metrics.jsonl \
     --metrics kl \
     --smooth-window 0 \
-    --output exp_visuals/sd3_512/kl.png
+    --output exp_visuals/sd3_1024_2/kl.png
 
 
 
 python -m training.ppo.export_epd_predictor \
   exps/20251203-011623-sd3_512 \
-  --checkpoint checkpoints/policy-step009000.pt
+  --checkpoint checkpoints/policy-step011000.pt

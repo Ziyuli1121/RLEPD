@@ -60,8 +60,8 @@ python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
 
 # epd
 python sample_sd3.py \
-  --predictor exps/20251203-011623-sd3_512/export/network-snapshot-export-step008000.pkl \
+  --predictor exps/20251203-011623-sd3_512/export/network-snapshot-export-step016000.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
   --max-batch-size 1 \
-  --outdir samples/sd3_epd_9_512_10450
+  --outdir samples/sd3_epd_9_512_18450

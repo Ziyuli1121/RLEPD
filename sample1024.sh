@@ -5,68 +5,71 @@ python sample_sd3_baseline.py --sampler edm --resolution 1024 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 8 \
-  --outdir ./samples/sd3_edm_flowmatch_16_1024
+  --num-steps 10 \
+  --outdir ./samples/sd3_edm_20_1024
 
 python sample_sd3_baseline.py --sampler dpm2 --resolution 1024 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 9 \
-  --outdir ./samples/sd3_dpm2_flowmatch_16_1024
+  --num-steps 10 \
+  --outdir ./samples/sd3_dpm2_20_1024
 
 python sample_sd3_baseline.py --sampler ipndm --resolution 1024  \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 17 --max-order 3 \
-  --outdir ./samples/sd3_ipndm_flowmatch_16_1024
+  --num-steps 20 --max-order 4 \
+  --outdir ./samples/sd3_ipndm4_20_1024
 
 python sample_sd3_baseline.py --sampler sd3 --resolution 1024  \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 16 \
-  --outdir ./samples/sd3_default_16_1024
+  --num-steps 20 \
+  --outdir ./samples/sd3_default_20_1024_nofinal
 ####################
 
 
-python sample_sd3_baseline.py --sampler edm --resolution 1024 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 14 \
-  --outdir ./samples/sd3_edm_flowmatch_28_1024
+# python sample_sd3_baseline.py --sampler edm --resolution 1024 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 14 \
+#   --outdir ./samples/sd3_edm_28_1024
 
 python sample_sd3_baseline.py --sampler dpm2 --resolution 1024 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 15 \
-  --outdir ./samples/sd3_dpm2_flowmatch_28_1024
+  --num-steps 14 \
+  --outdir ./samples/sd3_dpm2_28_1024
 
 python sample_sd3_baseline.py --sampler ipndm --resolution 1024 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" --batch 8 \
-  --num-steps 29 --max-order 3 \
-  --outdir ./samples/sd3_ipndm_flowmatch_28_1024
+  --num-steps 28 --max-order 4 \
+  --outdir ./samples/sd3_ipndm4_28_1024
 
-python sample_sd3_baseline.py --sampler sd3 --resolution 1024 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 28 \
-  --outdir ./samples/sd3_default_28_1024
+# python sample_sd3_baseline.py --sampler sd3 --resolution 1024 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 28 \
+#   --outdir ./samples/sd3_default_28_1024_nofinal
   
 # sd3 epd
+python -m training.ppo.export_epd_predictor \
+  exps/20251206-131339-sd3_1024 \
+  --checkpoint checkpoints/policy-step007000.pt
 
-# python sample_sd3.py \
-#   --predictor exps/20251201-201759-sd3_512/export/network-snapshot-export-step002000.pkl \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" \
-#   --max-batch-size 4 \
-#   --outdir samples/sd3_epd_9_1024_2000
+python sample_sd3.py \
+  --predictor exps/20251206-131339-sd3_1024/export/network-snapshot-export-step007000.pkl \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" \
+  --max-batch-size 4 \
+  --outdir samples/sd3_epd_1024_7000
 
 ####################
 
@@ -126,13 +129,12 @@ score_all_metrics() {
 }
 
 
-score_all_metrics sd3_default_16_1024
-score_all_metrics sd3_edm_flowmatch_16_1024
-score_all_metrics sd3_dpm2_flowmatch_16_1024
-score_all_metrics sd3_ipndm_flowmatch_16_1024
-# score_all_metrics sd3_epd_9_1024_2000
-score_all_metrics sd3_default_28_1024
-score_all_metrics sd3_edm_flowmatch_28_1024
-score_all_metrics sd3_dpm2_flowmatch_28_1024
-score_all_metrics sd3_ipndm_flowmatch_28_1024
-score_all_metrics sd3_epd_9_512_10450
+score_all_metrics sd3_edm_20_1024
+score_all_metrics sd3_dpm2_20_1024
+score_all_metrics sd3_ipndm4_20_1024
+score_all_metrics sd3_default_20_1024_nofinal
+
+score_all_metrics sd3_dpm2_28_1024
+score_all_metrics sd3_ipndm4_28_1024
+
+score_all_metrics sd3_epd_1024_7000

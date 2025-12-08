@@ -373,7 +373,7 @@ if __name__ == "__main__":
 '''
 
 python visualize_dirichlet.py \
-    --checkpoint /work/nvme/betk/zli42/RLEPD/exps/20251123-144006-sd3_smoke/export/network-snapshot-export-step000005.pkl \
+    --checkpoint /work/nvme/betk/zli42/RLEPD/exps/20251206-131339-sd3_1024/export/network-snapshot-export-step005000.pkl \
     --output dirichlet_heatmap.png \
     --surface-step 5 \
     --surface-target position \

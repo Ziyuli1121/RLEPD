@@ -51,19 +51,19 @@
 #     --outdir ./samples/ttt
 
 # # sd3 baseline
-python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 16 \
-  --outdir ./samples/sd3_default_16_512
+# python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 16 \
+#   --outdir ./samples/sd3_default_16_512
 
-python sample_sd3_baseline.py --sampler edm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 9 \
-  --outdir ./samples/sd3_edm_flowmatch_16_512
+# python sample_sd3_baseline.py --sampler edm --resolution 512 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 9 \
+#   --outdir ./samples/sd3_edm_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler edm --schedule-type polynomial \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -72,12 +72,12 @@ python sample_sd3_baseline.py --sampler edm --resolution 512 \
 #   --num-steps 8 \
 #   --outdir ./samples/sd3_edm_poly
 
-python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 9 \
-  --outdir ./samples/sd3_dpm2_flowmatch_16_512
+# python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 9 \
+#   --outdir ./samples/sd3_dpm2_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler dpm2 --schedule-type logsnr \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -86,12 +86,12 @@ python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
 #   --num-steps 8 \
 #   --outdir ./samples/sd3_dpm2_logsnr
 
-python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 16 \
-  --outdir ./samples/sd3_ipndm_flowmatch_16_512
+# python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" --batch 8 \
+#   --num-steps 16 \
+#   --outdir ./samples/sd3_ipndm_flowmatch_16_512
 
 # python sample_sd3_baseline.py --sampler ipndm --schedule-type time_uniform \
 #   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
@@ -116,11 +116,11 @@ python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
 #   --outdir samples/sd3_epd_9_2900
 
 python sample_sd3.py \
-  --predictor exps/20251201-145511-sd3_512/export/network-snapshot-export-step002000.pkl \
+  --predictor exps/fake-sd3-11-1024/network-snapshot-000005.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
-  --max-batch-size 1 \
-  --outdir samples/sd3_epd_9_512_2000
+  --max-batch-size 2 \
+  --outdir samples/sd3_1024_20nfe_test
   
 # # sd3.5 baseline
 
@@ -198,9 +198,8 @@ score_all_metrics() {
 }
 
 # Change the name below to score a different folder under samples/.
-sleep 3
-score_all_metrics sd3_epd_9_512_2000
-
+score_all_metrics sd3_1024_20nfe_test
+score_all_metrics sd3_default_28_1024_nofinal
 
 # visualize dirichlet
 # python visualize_dirichlet.py \
