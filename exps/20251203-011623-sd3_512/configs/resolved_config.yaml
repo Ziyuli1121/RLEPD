@@ -1,0 +1,71 @@
+run:
+  output_root: exps
+  run_name: sd3_512
+  seed: 0
+  timestamp: 20251203-011623
+  run_id: 20251203-011623-sd3_512
+  run_dir: /work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512
+data:
+  predictor_snapshot: exps/20251201-201759-sd3_512/export/network-snapshot-export-step002450.pkl
+  prompt_csv: null
+model:
+  dataset_name: ms_coco
+  guidance_type: cfg
+  guidance_rate: 4.5
+  schedule_type: flowmatch
+  schedule_rho: 1.0
+  num_steps: 10
+  num_points: 2
+  backend: sd3
+  resolution: 512
+  backend_options:
+    model_name_or_path: stabilityai/stable-diffusion-3-medium-diffusers
+    sigma_min: 0.0029940119760479044
+    sigma_max: 1.0
+    resolution: 512
+  sigma_min: null
+  sigma_max: null
+  flowmatch_mu: null
+  flowmatch_shift: null
+reward:
+  type: multi
+  weights_path: weights/HPS_v2.1_compressed.pt
+  batch_size: 4
+  enable_amp: true
+  hps_version: v2.1
+  cache_dir: weights
+  multi:
+    weights:
+      hps: 1.0
+      pickscore: 0.0
+      imagereward: 0.0
+      clip: 0.0
+      aesthetic: 0.0
+    pickscore:
+      model: yuvalkirstain/PickScore_v1
+      processor: laion/CLIP-ViT-H-14-laion2B-s32B-b79K
+    imagereward:
+      checkpoint: weights/ImageReward.pt
+      med_config: weights/med_config.json
+      cache_dir: weights
+    clip:
+      cache_dir: weights/clip
+    aesthetic:
+      predictor_path: weights/sac+logos+ava1-l14-linearMSE.pth
+      clip_path: weights/clip
+ppo:
+  rollout_batch_size: 16
+  rloo_k: 4
+  ppo_epochs: 1
+  minibatch_size: 4
+  learning_rate: 2.0e-05
+  clip_range: 0.2
+  kl_coef: 0.0
+  entropy_coef: 0.0
+  max_grad_norm: 1.0
+  decode_rgb: true
+  steps: 99999
+  dirichlet_concentration: 25.0
+logging:
+  log_interval: 1
+  save_interval: 100

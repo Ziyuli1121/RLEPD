@@ -1,0 +1,42 @@
+{
+  "loss_kwargs": {
+    "class_name": "training.loss.EPD_loss"
+  },
+  "pred_kwargs": {
+    "class_name": "training.networks.EPD_predictor",
+    "num_steps": 10,
+    "num_points": 2,
+    "dataset_name": "ms_coco",
+    "guidance_type": "cfg",
+    "guidance_rate": 4.5,
+    "schedule_type": "flowmatch",
+    "schedule_rho": 1.0,
+    "afs": false,
+    "scale_dir": 0.0,
+    "scale_time": 0.0,
+    "predict_x0": false,
+    "lower_order_final": true,
+    "sampler_stu": "epd",
+    "sampler_tea": "dpm",
+    "M": 1,
+    "alpha": 10.0,
+    "fcn": false,
+    "max_order": 2,
+    "backend": "sd3",
+    "backend_config": {
+      "model_name_or_path": "stabilityai/stable-diffusion-3-medium-diffusers",
+      "sigma_min": 0.0029940119760479044,
+      "sigma_max": 1.0,
+      "resolution": 512
+    },
+    "img_resolution": 512
+  },
+  "export_info": {
+    "source_run": "/work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512",
+    "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512/checkpoints/policy-step013000.pt",
+    "sanitized_rows": {
+      "reordered_rows": 0,
+      "adjusted_rows": 0
+    }
+  }
+}

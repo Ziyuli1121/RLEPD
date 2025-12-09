@@ -1,13 +1,7 @@
-src/
-samples/
-MPS/
-HPSv2/
-HPSv3/
-weights/
-exps/
-results/
 __pycache__/
 */__pycache__/
 **/__pycache__/
-exp_visuals/
-test_samples/
+
+src/ms_coco/
+samples/
+weights/
