@@ -3,5 +3,6 @@ __pycache__/
 **/__pycache__/
 
 src/ms_coco/
+src/taming-transformers/
 samples/
 weights/
