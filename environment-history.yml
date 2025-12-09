@@ -1,0 +1,16 @@
+name: edm
+channels:
+  - defaults
+dependencies:
+  - click[version='>=8.0']
+  - imageio
+  - numpy[version='>=1.20']
+  - pillow[version='>=8.3.1']
+  - pip
+  - psutil
+  - python[version='>=3.8,<3.10']
+  - requests
+  - scipy[version='>=1.7.1']
+  - tqdm
+  - lightning
+prefix: /work/hdd/becj/zli42/zli42_envs/edm
