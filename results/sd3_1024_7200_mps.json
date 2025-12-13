@@ -1,0 +1,20 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/sd3_1024_7200",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "weights": "weights/MPS_overall_checkpoint.pth",
+  "mps_root": "/work/nvme/betk/zli42/RLEPD/MPS",
+  "stats": {
+    "count": 1000,
+    "mean": 11.932416915893555,
+    "std": 5.046534061431885,
+    "min": -8.640625,
+    "max": 21.59375
+  },
+  "metadata": {
+    "duration": 59.83260107040405,
+    "num_images": 1000,
+    "batch_size": 4,
+    "device": "cuda"
+  }
+}

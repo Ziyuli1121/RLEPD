@@ -373,9 +373,9 @@ if __name__ == "__main__":
 '''
 
 python visualize_dirichlet.py \
-    --checkpoint /work/nvme/betk/zli42/RLEPD/exps/20251206-131339-sd3_1024/export/network-snapshot-export-step005000.pkl \
+    --checkpoint /work/nvme/betk/zli42/RLEPD/exps/20251210-005434-sd3_512/export/network-snapshot-export-step004000.pkl \
     --output dirichlet_heatmap.png \
-    --surface-step 5 \
+    --surface-step 9 \
     --surface-target position \
     --surface-output beta_surface_step5.png \
     --concentration 10

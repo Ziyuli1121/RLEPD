@@ -192,10 +192,10 @@ def _run_epd(
     show_default=True,
     help="Maximum order for the IPNDM baseline.",
 )
-@click.option("--ddim-steps", type=int, default=16, show_default=True, help="Steps for DDIM baseline.")
-@click.option("--dpm-steps", type=int, default=11, show_default=True, help="Steps for DPM2 baseline.")
-@click.option("--edm-steps", type=int, default=11, show_default=True, help="Steps for EDM baseline.")
-@click.option("--ipndm-steps", type=int, default=16, show_default=True, help="Steps for IPNDM baseline.")
+@click.option("--ddim-steps", type=int, default=36, show_default=True, help="Steps for DDIM baseline.")
+@click.option("--dpm-steps", type=int, default=18, show_default=True, help="Steps for DPM2 baseline.")
+@click.option("--edm-steps", type=int, default=18, show_default=True, help="Steps for EDM baseline.")
+@click.option("--ipndm-steps", type=int, default=36, show_default=True, help="Steps for IPNDM baseline.")
 @click.option("--ddim-eta", type=float, default=0.0, show_default=True, help="DDIM eta parameter.")
 def main(
     prompt: str,
@@ -310,14 +310,14 @@ if __name__ == "__main__":
 
 '''
 python sd15_prompt_sample.py \
-  --prompt "Modern minimalist architecture, white concrete house, straight lines, blue sky, geometric shapes." \
-  --outdir ./sd15_images/3 \
-  --seed 42
+  --prompt "A metallic flower." \
+  --outdir ./sd15_images/5 \
+  --seed 3
 
 
 1. A watercolor fox in a forest.
 2. One bright yellow sunflower in a field on a sunny day.
-3. 
-
+3. A white shark.
+4. A cabin in the snow.
 
 '''

@@ -141,7 +141,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--r-epsilon",
         type=_positive_float,
-        default=1e-3,
+        default=0.33,
         help="Perturbation applied around r-base to keep Dirichlet well-behaved.",
     )
     parser.add_argument(

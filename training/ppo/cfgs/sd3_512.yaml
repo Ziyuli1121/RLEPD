@@ -1,10 +1,10 @@
 run:
   output_root: "exps"
-  run_name: "sd3_512"
+  run_name: "sd3_512_new"
   seed: 0
 
 data:
-  predictor_snapshot: "exps/20251201-201759-sd3_512/export/network-snapshot-export-step002450.pkl"
+  predictor_snapshot: "exps/fake-sd3-11-512/network-snapshot-000005.pkl"
   prompt_csv: null
 
 model:
@@ -55,15 +55,15 @@ ppo:
   rloo_k: 4
   ppo_epochs: 1
   minibatch_size: 4
-  learning_rate: 2.0e-5
+  learning_rate: 7e-5
   clip_range: 0.2
   kl_coef: 0.0
   entropy_coef: 0.0 # 0.001?
   max_grad_norm: 1.0
   decode_rgb: true
   steps: 99999
-  dirichlet_concentration: 25.0
+  dirichlet_concentration: 10
 
 logging:
   log_interval: 1
-  save_interval: 100
+  save_interval: 500

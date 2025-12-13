@@ -51,54 +51,33 @@
 #     --outdir ./samples/ttt
 
 # # sd3 baseline
-# python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 16 \
-#   --outdir ./samples/sd3_default_16_512
+python sample_sd3_baseline.py --sampler edm --resolution 512 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 14 \
+  --outdir ./samples/sd3_edm_28_512
 
-# python sample_sd3_baseline.py --sampler edm --resolution 512 \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 9 \
-#   --outdir ./samples/sd3_edm_flowmatch_16_512
+python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 14 \
+  --outdir ./samples/sd3_dpm2_28_512
 
-# python sample_sd3_baseline.py --sampler edm --schedule-type polynomial \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 8 \
-#   --outdir ./samples/sd3_edm_poly
+python sample_sd3_baseline.py --sampler ipndm --resolution 512  \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 28 --max-order 4 \
+  --outdir ./samples/sd3_ipndm4_28_512
 
-# python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 9 \
-#   --outdir ./samples/sd3_dpm2_flowmatch_16_512
-
-# python sample_sd3_baseline.py --sampler dpm2 --schedule-type logsnr \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 8 \
-#   --outdir ./samples/sd3_dpm2_logsnr
-
-# python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 16 \
-#   --outdir ./samples/sd3_ipndm_flowmatch_16_512
-
-# python sample_sd3_baseline.py --sampler ipndm --schedule-type time_uniform \
-#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-#   --prompt-file src/prompts/test.txt \
-#   --seeds "0-999" --batch 8 \
-#   --num-steps 16 \
-#   --outdir ./samples/sd3_ipndm_uniform
+python sample_sd3_baseline.py --sampler sd3 --resolution 512  \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" --batch 8 \
+  --num-steps 28 \
+  --outdir ./samples/sd3_default_28_512
 
 # # sd3 epd
 # python sample_sd3.py \
@@ -115,12 +94,12 @@
 #   --max-batch-size 4 \
 #   --outdir samples/sd3_epd_9_2900
 
-python sample_sd3.py \
-  --predictor exps/fake-sd3-11-1024/network-snapshot-000005.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 2 \
-  --outdir samples/sd3_1024_20nfe_test
+# python sample_sd3.py \
+#   --predictor exps/fake-sd3-11-1024/network-snapshot-000005.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --max-batch-size 2 \
+#   --outdir samples/sd3_1024_20nfe_test
   
 # # sd3.5 baseline
 
@@ -198,8 +177,10 @@ score_all_metrics() {
 }
 
 # Change the name below to score a different folder under samples/.
-score_all_metrics sd3_1024_20nfe_test
-score_all_metrics sd3_default_28_1024_nofinal
+score_all_metrics sd3_ipndm4_28_512
+score_all_metrics sd3_default_28_512
+score_all_metrics sd3_dpm2_28_512
+score_all_metrics sd3_edm_28_512
 
 # visualize dirichlet
 # python visualize_dirichlet.py \

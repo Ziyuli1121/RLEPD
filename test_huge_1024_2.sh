@@ -2,26 +2,12 @@ python -m training.ppo.export_epd_predictor \
   exps/20251206-131339-sd3_1024 \
   --checkpoint checkpoints/policy-step005500.pt
 
-python -m training.ppo.export_epd_predictor \
-  exps/20251206-131339-sd3_1024 \
-  --checkpoint checkpoints/policy-step006500.pt
-
-
 python sample_sd3.py \
   --predictor exps/20251206-131339-sd3_1024/export/network-snapshot-export-step005500.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
   --max-batch-size 1 \
   --outdir samples/sd3_epd_11_1024_5500
-
-python sample_sd3.py \
-  --predictor exps/20251206-131339-sd3_1024/export/network-snapshot-export-step006500.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 1 \
-  --outdir samples/sd3_epd_11_1024_6500
-
-
 
 score_all_metrics() {
     local name="$1"
@@ -79,4 +65,3 @@ score_all_metrics() {
 }
 
 score_all_metrics sd3_epd_11_1024_5500
-score_all_metrics sd3_epd_11_1024_6500

@@ -250,10 +250,10 @@ def _run_epd(
     show_default=True,
     help="Maximum order for the IPNDM baseline.",
 )
-@click.option("--euler-steps", type=int, default=20, show_default=True, help="Steps for FlowMatch Euler baseline.")
+@click.option("--euler-steps", type=int, default=28, show_default=True, help="Steps for FlowMatch Euler baseline.")
 @click.option("--edm-steps", type=int, default=14, show_default=True, help="Steps for EDM baseline.")
-@click.option("--dpm-steps", type=int, default=10, show_default=True, help="Steps for DPM2 baseline.")
-@click.option("--ipndm-steps", type=int, default=20, show_default=True, help="Steps for IPNDM baseline.")
+@click.option("--dpm-steps", type=int, default=14, show_default=True, help="Steps for DPM2 baseline.")
+@click.option("--ipndm-steps", type=int, default=28, show_default=True, help="Steps for IPNDM baseline.")
 def main(
     prompt: str,
     predictor: str,
@@ -378,18 +378,19 @@ if __name__ == "__main__":
 
 '''
 python sd3_prompt_sample.py \
-    --prompt "Cyberpunk city street at night, wet ground reflections, neon lights, high contrast, cinematic lighting." \
+    --prompt "Five cars on the street." \
     --predictor exps/20251206-131339-sd3_1024/export/network-snapshot-export-step005500.pkl \
-    --outdir ./sd3_images/7 \
-    --seed 444
+    --outdir ./sd3_images/10 \
+    --seed 0
 
 
 1. a photo of a toothbrush below a pizza
-2. a photo of a tie above a sink
-3. A close-up of a human hand holding a clear glass of water, realistic skin texture, accurate fingers.
-4. A robot holding a piece of paper with the text "Hello AI" written on it.
-5. Ten distinct bottles of wine lined up on a shelf, each a different color.
-6. A hamburger made of wool.
-7.
-
+2. A robot holding a piece of paper with the text "Hello AI" written on it.
+3. (masterpiece, best quality), 1 girl, solo, portrait, up close, long white hair, flowing hair, glowing golden eyes, holding white flowers, flowers in hair, ethereal atmosphere, soft lighting, backlight, cinematic lighting, delicate features, dreamlike, anime style illustration, detailed eyes.
+4. misaka mikoto
+5. A semi-realistic digital painting of a young woman looking back over her shoulder on a rainy cyberpunk street at night. She has an anime-influenced face but realistic proportions and detailed clothing textures. Neon signs reflecting on wet pavement, volumetric fog, cinematic lighting, thick brushstrokes, highly detailed, rich colors, evocative atmosphere, game concept art style.
+6. A cyberpunk-style paramedic overlooks a futuristic city tower.
+7. Product photograph of an ornate antique steampunk pocket watch, exposed gears and springs, engraved brass casing, intricate mechanical details, studio lighting.
+8. Macro shot of rain droplets on a waxy green leaf, clear refractions inside the droplets, detailed leaf veins, natural morning dew aesthetic.
+9. Five cars on the street.
 '''
