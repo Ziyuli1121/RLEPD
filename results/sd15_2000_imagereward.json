@@ -1,0 +1,20 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/sd15_2000",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 3.124742269515991,
+    "std": 1.0293549299240112,
+    "min": 0.8290679454803467,
+    "max": 5.044975280761719
+  },
+  "metadata": {
+    "duration": 79.29349398612976,
+    "num_images": 1000,
+    "batch_size": 4,
+    "device": "cuda",
+    "weights": "ImageReward-v1.0",
+    "cache_dir": "weights"
+  }
+}

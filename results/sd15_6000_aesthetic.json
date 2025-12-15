@@ -1,0 +1,19 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/sd15_6000",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 5.224452972412109,
+    "std": 0.5217108726501465,
+    "min": 2.833179473876953,
+    "max": 6.664973735809326
+  },
+  "metadata": {
+    "duration": 25.782230377197266,
+    "num_images": 1000,
+    "batch_size": 32,
+    "device": "cuda",
+    "weights": "weights/sac+logos+ava1-l14-linearMSE.pth"
+  }
+}

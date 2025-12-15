@@ -1,37 +1,57 @@
 python -m training.ppo.export_epd_predictor \
-  exps/20251210-005434-sd3_512 \
-  --checkpoint checkpoints/policy-step011000.pt
+  exps/20251214-012304-sd3_1024_continue \
+  --checkpoint checkpoints/policy-step000800.pt
 
 python -m training.ppo.export_epd_predictor \
-  exps/20251210-005434-sd3_512 \
-  --checkpoint checkpoints/policy-step012000.pt
+  exps/20251214-012304-sd3_1024_continue \
+  --checkpoint checkpoints/policy-step001800.pt
 
 python -m training.ppo.export_epd_predictor \
-  exps/20251210-005434-sd3_512 \
-  --checkpoint checkpoints/policy-step013000.pt
+  exps/20251214-012304-sd3_1024_continue \
+  --checkpoint checkpoints/policy-step002800.pt
 
+python -m training.ppo.export_epd_predictor \
+  exps/20251214-012304-sd3_1024_continue \
+  --checkpoint checkpoints/policy-step003800.pt
+
+python -m training.ppo.export_epd_predictor \
+  exps/20251214-012304-sd3_1024_continue \
+  --checkpoint checkpoints/policy-step004800.pt
 
 python sample_sd3.py \
-  --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step011000.pkl \
+  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step000800.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
   --max-batch-size 4 \
-  --outdir samples/sd3_512_11000
+  --outdir samples/sd3_1024_8000
 
 python sample_sd3.py \
-  --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step012000.pkl \
+  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step001800.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
   --max-batch-size 4 \
-  --outdir samples/sd3_512_12000
+  --outdir samples/sd3_1024_9000
 
 python sample_sd3.py \
-  --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step013000.pkl \
+  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step002800.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
   --max-batch-size 4 \
-  --outdir samples/sd3_512_13000
+  --outdir samples/sd3_1024_10000
 
+python sample_sd3.py \
+  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step003800.pkl \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" \
+  --max-batch-size 4 \
+  --outdir samples/sd3_1024_11000
+
+python sample_sd3.py \
+  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step004800.pkl \
+  --prompt-file src/prompts/test.txt \
+  --seeds "0-999" \
+  --max-batch-size 4 \
+  --outdir samples/sd3_1024_12000
 
 score_all_metrics() {
     local name="$1"
@@ -88,7 +108,4 @@ score_all_metrics() {
         --output-json "results/${prefix}_mps.json"
 }
 
-
-score_all_metrics sd3_512_11000
-score_all_metrics sd3_512_12000
-score_all_metrics sd3_512_13000
+score_all_metrics sd3_1024_8000

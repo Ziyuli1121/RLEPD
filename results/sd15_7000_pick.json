@@ -1,0 +1,20 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/sd15_7000",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 21.101667404174805,
+    "std": 1.3139801025390625,
+    "min": 17.389604568481445,
+    "max": 25.252304077148438
+  },
+  "metadata": {
+    "duration": 85.06605052947998,
+    "num_images": 1000,
+    "batch_size": 8,
+    "device": "cuda",
+    "processor": "laion/CLIP-ViT-H-14-laion2B-s32B-b79K",
+    "model": "yuvalkirstain/PickScore_v1"
+  }
+}
