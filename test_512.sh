@@ -1,57 +1,350 @@
-python -m training.ppo.export_epd_predictor \
-  exps/20251214-012304-sd3_1024_continue \
-  --checkpoint checkpoints/policy-step000800.pt
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step001000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step002000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step003000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step004000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step005000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step006000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step007000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step008000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-134452-sd15_k5 \
+#   --checkpoint checkpoints/policy-step009000.pt
 
 python -m training.ppo.export_epd_predictor \
-  exps/20251214-012304-sd3_1024_continue \
-  --checkpoint checkpoints/policy-step001800.pt
+  exps/20251214-134452-sd15_k5 \
+  --checkpoint checkpoints/policy-step010000.pt
+
+###########################################################
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step001000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step002000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step003000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step004000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step005000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step006000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step007000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step008000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k20 \
+#   --checkpoint checkpoints/policy-step009000.pt
 
 python -m training.ppo.export_epd_predictor \
-  exps/20251214-012304-sd3_1024_continue \
-  --checkpoint checkpoints/policy-step002800.pt
+  exps/20251214-135518-sd15_k20 \
+  --checkpoint checkpoints/policy-step010000.pt
+
+#############################################################
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step001000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step002000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step003000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step004000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step005000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step006000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step007000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step008000.pt
+
+# python -m training.ppo.export_epd_predictor \
+#   exps/20251214-135518-sd15_k50 \
+#   --checkpoint checkpoints/policy-step009000.pt
 
 python -m training.ppo.export_epd_predictor \
-  exps/20251214-012304-sd3_1024_continue \
-  --checkpoint checkpoints/policy-step003800.pt
+  exps/20251214-135518-sd15_k50 \
+  --checkpoint checkpoints/policy-step010000.pt
 
-python -m training.ppo.export_epd_predictor \
-  exps/20251214-012304-sd3_1024_continue \
-  --checkpoint checkpoints/policy-step004800.pt
+#############################################################
 
-python sample_sd3.py \
-  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step000800.pkl \
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step001000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_1000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step002000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_2000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step003000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_3000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step004000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_4000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step005000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_5000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step006000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_6000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step007000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_7000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step008000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_8000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step009000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_9000
+
+# MASTER_PORT=44444 python sample.py \
+#   --predictor_path exps/20251214-134452-sd15_k5/export/network-snapshot-export-step010000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k5_10000
+
+##############################################################
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step001000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_1000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step002000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_2000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step003000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_3000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step004000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_4000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step005000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_5000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step006000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_6000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step007000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_7000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step008000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_8000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step009000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k20_9000
+
+MASTER_PORT=55555 python sample.py \
+  --predictor_path exps/20251214-135518-sd15_k20/export/network-snapshot-export-step010000.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd3_1024_8000
+  --batch 16 \
+  --outdir samples/sd15_k20_10000
 
-python sample_sd3.py \
-  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step001800.pkl \
+#########################################################
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step001000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_1000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step002000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_2000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step003000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_3000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step004000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_4000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step005000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_5000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step006000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_6000
+
+# MASTER_PORT=22222 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step007000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_7000
+
+# MASTER_PORT=33333 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step008000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_8000
+
+# MASTER_PORT=11111 python sample.py \
+#   --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step009000.pkl \
+#   --prompt-file src/prompts/test.txt \
+#   --seeds "0-999" \
+#   --batch 16 \
+#   --outdir samples/sd15_k50_9000
+
+MASTER_PORT=11888 python sample.py \
+  --predictor_path exps/20251214-135518-sd15_k50/export/network-snapshot-export-step010000.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd3_1024_9000
+  --batch 16 \
+  --outdir samples/sd15_k50_10000
 
-python sample_sd3.py \
-  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step002800.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd3_1024_10000
 
-python sample_sd3.py \
-  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step003800.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd3_1024_11000
 
-python sample_sd3.py \
-  --predictor exps/20251214-012304-sd3_1024_continue/export/network-snapshot-export-step004800.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --max-batch-size 4 \
-  --outdir samples/sd3_1024_12000
+
+
+
+
+
 
 score_all_metrics() {
     local name="$1"
@@ -108,4 +401,35 @@ score_all_metrics() {
         --output-json "results/${prefix}_mps.json"
 }
 
-score_all_metrics sd3_1024_8000
+# score_all_metrics sd15_k5_1000
+# score_all_metrics sd15_k5_2000
+# score_all_metrics sd15_k5_3000
+# score_all_metrics sd15_k5_4000
+# score_all_metrics sd15_k5_5000
+# score_all_metrics sd15_k5_6000
+# score_all_metrics sd15_k5_7000
+# score_all_metrics sd15_k5_8000
+# score_all_metrics sd15_k5_9000
+score_all_metrics sd15_k5_10000
+
+# score_all_metrics sd15_k20_1000
+# score_all_metrics sd15_k20_2000
+# score_all_metrics sd15_k20_3000
+# score_all_metrics sd15_k20_4000
+# score_all_metrics sd15_k20_5000
+# score_all_metrics sd15_k20_6000
+# score_all_metrics sd15_k20_7000
+# score_all_metrics sd15_k20_8000
+# score_all_metrics sd15_k20_9000
+score_all_metrics sd15_k20_10000
+
+# score_all_metrics sd15_k50_1000
+# score_all_metrics sd15_k50_2000
+score_all_metrics sd15_k50_3000
+score_all_metrics sd15_k50_4000
+score_all_metrics sd15_k50_5000
+score_all_metrics sd15_k50_6000
+score_all_metrics sd15_k50_7000
+score_all_metrics sd15_k50_8000
+score_all_metrics sd15_k50_9000
+score_all_metrics sd15_k50_10000

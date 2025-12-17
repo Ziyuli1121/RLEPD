@@ -1,67 +1,44 @@
-# ipndm
-python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 29 --max-order 3 \
-  --outdir ./test_samples/ipndm_28step_28nfe
+# python fake_train.py \
+#   --outdir exps/1 \
+#   --num-steps 7 \
+#   --num-points 2 \
+#   --guidance-rate 4.5 \
+#   --schedule-type flowmatch \
+#   --backend sd3 \
+#   --resolution 1024 \
+#   --backend-options '{"model_name_or_path":"stabilityai/stable-diffusion-3-medium-diffusers"}' \
+#   --r-base 0.5 \
+#   --r-epsilon 0.33
 
-python sample_sd3_baseline.py --sampler ipndm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 17 --max-order 3 \
-  --outdir ./test_samples/ipndm_16step_16nfe
+run_sd3_set() {
+  local prompt="$1"
+  local seeds="${2:-0}"
 
-# dpm
-python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 15 \
-  --outdir ./test_samples/dpm_14step_28nfe
+  python sample_sd3.py --predictor exps/fake-sd3-9-512/network-snapshot-000005.pkl \
+    --seeds "$seeds" \
+    --outdir training_step_images/1 \
+    --prompt "$prompt"
 
-python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 9 \
-  --outdir ./test_samples/dpm_8step_16nfe
+  python sample_sd3.py --predictor exps/fake-sd3-11-512/network-snapshot-000005.pkl \
+    --seeds "$seeds" \
+    --outdir training_step_images/2 \
+    --prompt "$prompt"
 
-# edm
-python sample_sd3_baseline.py --sampler edm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 14 \
-  --outdir ./test_samples/edm_14step_28nfe
+  python sample_sd3.py --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step001000.pkl \
+    --seeds "$seeds" \
+    --outdir training_step_images/3 \
+    --prompt "$prompt"
 
-python sample_sd3_baseline.py --sampler edm --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 8 \
-  --outdir ./test_samples/edm_8step_16nfe
+  python sample_sd3.py --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step005000.pkl \
+    --seeds "$seeds" \
+    --outdir training_step_images/4 \
+    --prompt "$prompt"
 
-# default
-python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 28 \
-  --outdir ./test_samples/default_28step_28nfe
+  python sample_sd3.py --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step009000.pkl \
+    --seeds "$seeds" \
+    --outdir training_step_images/5 \
+    --prompt "$prompt"
+}
 
-python sample_sd3_baseline.py --sampler sd3 --resolution 512 \
-  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" --batch 2 \
-  --num-steps 16 \
-  --outdir ./test_samples/default_16step_16nfe
 
-# epd
-python sample_sd3.py \
-  --predictor exps/fake-sd3-11-512-compare/network-snapshot-000005.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-9" \
-  --max-batch-size 1 \
-  --outdir samples/test_compare
+run_sd3_set 'A photo of a cow left of a stop sign.' '8'

@@ -176,33 +176,29 @@ def epd_sampler(
                 print_str += f'w{j}: {weight_s[0,j,:,:].mean().item():.5f} |'
             dist.print0(print_str)
         
-        # Switch update rule for SD3 flowmatch: combine multi-point velocities then step once.
+        # Switch update rule for SD3 flowmatch: always use mid-point velocities (no K=1 shortcut).
         backend_type = getattr(net, "backend", None)
         if backend_type == "sd3":
-            # Combine multi-point velocities, then do a single Euler step on sigma grid.
-            if num_points == 1:
-                v_combined = d_cur  # already evaluated at t_cur
-            else:
-                v_combined = torch.zeros_like(x_cur)
-                for j in range(num_points):
-                    r = r_s[:, j : j + 1, :, :]
-                    scale_time = scale_time_s[:, j : j + 1, :, :]
-                    scale_dir = scale_dir_s[:, j : j + 1, :, :]
-                    w = weight_s[:, j : j + 1, :, :]
-                    t_mid = (t_next ** r) * (t_cur ** (1 - r))
-                    x_mid = x_cur + (t_mid - t_cur) * d_cur
+            v_combined = torch.zeros_like(x_cur)
+            for j in range(num_points):
+                r = r_s[:, j : j + 1, :, :]
+                scale_time = scale_time_s[:, j : j + 1, :, :]
+                scale_dir = scale_dir_s[:, j : j + 1, :, :]
+                w = weight_s[:, j : j + 1, :, :]
+                t_mid = (t_next ** r) * (t_cur ** (1 - r))
+                x_mid = x_cur + (t_mid - t_cur) * d_cur
 
-                    denoised_t_mid = get_denoised(
-                        net,
-                        x_mid,
-                        scale_time * t_mid,
-                        class_labels=class_labels,
-                        condition=condition,
-                        unconditional_condition=unconditional_condition,
-                    )
+                denoised_t_mid = get_denoised(
+                    net,
+                    x_mid,
+                    scale_time * t_mid,
+                    class_labels=class_labels,
+                    condition=condition,
+                    unconditional_condition=unconditional_condition,
+                )
 
-                    d_mid = (x_mid - denoised_t_mid) / t_mid  # velocity v at mid-point
-                    v_combined = v_combined + w * scale_dir * d_mid
+                d_mid = (x_mid - denoised_t_mid) / t_mid  # velocity v at mid-point
+                v_combined = v_combined + w * scale_dir * d_mid
             # Euler step using combined velocity and sigma delta
             x_next = x_cur + (t_next - t_cur) * v_combined
         else:
@@ -268,8 +264,9 @@ def epd_parallel_sampler(
     # Time step discretization.
     x_list = []
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
+    backend_type = getattr(net, "backend", None)
     # Main sampling loop.
-    x_next = latents * t_steps[0]
+    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     x_list.append(x_next)
     inters = [x_next.unsqueeze(0)]
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):                # 0, ..., N-1
@@ -314,6 +311,7 @@ def epd_parallel_sampler(
                 print_str += f'w{j}: {weight_s[0,j,:,:].mean().item():.5f} |'
             dist.print0(print_str)
 
+        # SD3 uses flowmatch schedule starting at sigma=1: always use mid-point velocities (no K=1 shortcut).
         t_mid = (t_next ** r_s) * (t_cur ** (1 - r_s))
         x_mid = x_cur.unsqueeze(1) + (t_mid - t_cur).unsqueeze(-1) * d_cur.unsqueeze(1)
 
@@ -322,12 +320,34 @@ def epd_parallel_sampler(
 
         t_param = (scale_time_s * t_mid).view(B * num_points, 1, 1, 1)
 
-        cond_flat = None
-        if condition is not None:
-            cond_flat = condition.repeat_interleave(num_points, dim=0)
-        uc_flat = None
-        if unconditional_condition is not None:
-            uc_flat = unconditional_condition.repeat_interleave(num_points, dim=0)
+        def _repeat_sd3_condition(cond_obj, times):
+            if cond_obj is None:
+                return None
+            from models.backends.sd3_diffusers_backend import SD3Conditioning
+
+            return SD3Conditioning(
+                prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
+                pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
+                negative_prompt_embeds=cond_obj.negative_prompt_embeds.repeat_interleave(times, dim=0)
+                if cond_obj.negative_prompt_embeds is not None
+                else None,
+                negative_pooled_prompt_embeds=cond_obj.negative_pooled_prompt_embeds.repeat_interleave(times, dim=0)
+                if cond_obj.negative_pooled_prompt_embeds is not None
+                else None,
+                guidance_scale=cond_obj.guidance_scale,
+                num_images_per_prompt=cond_obj.num_images_per_prompt,
+            )
+
+        if backend_type == "sd3":
+            cond_flat = _repeat_sd3_condition(condition, num_points)
+            uc_flat = _repeat_sd3_condition(unconditional_condition, num_points)
+        else:
+            cond_flat = None
+            uc_flat = None
+            if condition is not None:
+                cond_flat = condition.repeat_interleave(num_points, dim=0)
+            if unconditional_condition is not None:
+                uc_flat = unconditional_condition.repeat_interleave(num_points, dim=0)
 
         denoised_t_mid_flat = get_denoised(
             net,
@@ -340,10 +360,16 @@ def epd_parallel_sampler(
         denoised_t_mid = denoised_t_mid_flat.view(B, num_points, C, H, W)
         d_mid = (x_mid - denoised_t_mid) / t_mid.unsqueeze(-1)
 
-        factor = (weight_s * scale_dir_s).unsqueeze(-1) * (t_next - t_cur).unsqueeze(1)
-        update = factor * d_mid  
-        update_sum = update.sum(dim=1)       
-        x_next = x_cur + update_sum
+        if backend_type == "sd3":
+            # Combine multi-point velocities then take a single Euler step on sigma grid.
+            weights = (weight_s * scale_dir_s).unsqueeze(-1)
+            v_combined = (weights * d_mid).sum(dim=1)
+            x_next = x_cur + (t_next - t_cur) * v_combined
+        else:
+            factor = (weight_s * scale_dir_s).unsqueeze(-1) * (t_next - t_cur).unsqueeze(1)
+            update = factor * d_mid  
+            update_sum = update.sum(dim=1)       
+            x_next = x_cur + update_sum
 
         x_list.append(x_next)
       

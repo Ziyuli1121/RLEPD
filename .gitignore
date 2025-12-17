@@ -5,3 +5,9 @@ __pycache__/
 src/ms_coco/
 samples/
 weights/
+latency_runs/
+pipeline_images/
+sd3_images/
+sd3_images_512/
+sd15_images/
+training_step_images/

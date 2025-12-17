@@ -378,19 +378,19 @@ if __name__ == "__main__":
 
 '''
 python sd3_prompt_sample.py \
-    --prompt "Five cars on the street." \
-    --predictor exps/20251206-131339-sd3_1024/export/network-snapshot-export-step005500.pkl \
-    --outdir ./sd3_images/10 \
-    --seed 0
+    --prompt "A wooden torii gate in the water, sunset reflection, calm ripples, peaceful vibe." \
+    --predictor exps/20251210-005434-sd3_512/export/network-snapshot-export-step009000.pkl \
+    --outdir ./sd3_images_512/11 \
+    --resolution 512 \
+    --seed 1
 
 
-1. a photo of a toothbrush below a pizza
-2. A robot holding a piece of paper with the text "Hello AI" written on it.
-3. (masterpiece, best quality), 1 girl, solo, portrait, up close, long white hair, flowing hair, glowing golden eyes, holding white flowers, flowers in hair, ethereal atmosphere, soft lighting, backlight, cinematic lighting, delicate features, dreamlike, anime style illustration, detailed eyes.
-4. misaka mikoto
-5. A semi-realistic digital painting of a young woman looking back over her shoulder on a rainy cyberpunk street at night. She has an anime-influenced face but realistic proportions and detailed clothing textures. Neon signs reflecting on wet pavement, volumetric fog, cinematic lighting, thick brushstrokes, highly detailed, rich colors, evocative atmosphere, game concept art style.
-6. A cyberpunk-style paramedic overlooks a futuristic city tower.
-7. Product photograph of an ornate antique steampunk pocket watch, exposed gears and springs, engraved brass casing, intricate mechanical details, studio lighting.
-8. Macro shot of rain droplets on a waxy green leaf, clear refractions inside the droplets, detailed leaf veins, natural morning dew aesthetic.
-9. Five cars on the street.
+1. A vintage film camera on a wooden table, plain wall background, studio light, sharp focus.
+2. A tiny tree frog sitting on a leaf, high-end CGI render. Wet, bumpy skin texture, individual scales visible, moisture droplets reflecting light.
+3. A hyper-realistic close-up of a baby fox sitting on a log. The background is a dense, complex forest environment featuring rich layers of natural vegetation and organic textures. The scenery is filled with intricate details of the wild, fading into a soft, deep background blur. Warm, gentle morning light illuminates the scene. High quality, 8k, soft bokeh.
+4. A cat holding a wooden sign clearly marked '2' standing next to a dog  holding a matching sign marked '1'
+5. A realistic close-up of a birthday cake with a lit lime-green number '8' candle, featuring white frosting piped around the edges topped with vibrant colorful sprinkles, light blue background, high quality food photography.
+8. A red car and a blue bus.
+10. Side profile of a woman wearing diamond earrings, elegant updo hair, dark background, rim lighting.
+11. A wooden torii gate in the water, sunset reflection, calm ripples, peaceful vibe.
 '''
