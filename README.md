@@ -1,127 +1,96 @@
-RLEPD — PPO Fine-Tuning for EPD Predictor Tables
-================================================
+## Parallel Diffusion Sampling with Low-Dimensional Alignment <br><sub>Official implementation</sub>
 
-This repository implements PPO fine-tuning for EPD predictor tables on top of Stable Diffusion v1.5. The end-to-end workflow has two entry points:
+**Abstract**: xxxxxxxxxxxxxxxxxxxx
 
-1. `train.sh` — create an initial predictor table, run `training/ppo.launch`, and export the learned predictor.
-2. `sample.sh` — run baseline solvers (DDIM/DPM2/EDM/iPNDM), sample with the PPO-trained predictor, and score the generated images (HPS/CLIP/Aesthetic/PickScore/ImageReward/MPS).
+## Requirements
 
-Directory Overview
-------------------
-
-| Path | Purpose |
-|------|---------|
-| `training/ppo/` | PPO configs, policy/runner/trainer, reward adapters, export utilities, and evaluation scripts. |
-| `training/network*`, `solvers.py`, `solver_utils.py` | EPD predictor and solver implementations shared by training and sampling. |
-| `sample.py`, `sample_baseline.py` | CLI entrypoints for PPO sampling and baseline solvers. |
-| `train.sh`, `sample.sh` | Reference pipelines for training and sampling/evaluation. |
-| `HPSv2`, `MPS` | Minimal code required by the reward and MPS scoring scripts. |
-| `torch_utils/`, `dnnlib/` | Utilities for distributed launch, weight download, and serialization. |
-
-Environment
------------
-
-- Python ≥ 3.9 and PyTorch ≥ 1.13 with CUDA.
-- Install dependencies listed in `environment.yml` (PyTorch, click, omegaconf, huggingface_hub, torchvision, etc.) or construct an equivalent virtual environment manually.
-- `torch_utils.download_util.check_file_by_key` fetches the Stable Diffusion v1.5 checkpoint and MS-COCO prompts automatically.
-- HPS weights are downloaded from `xswu/HPSv2` on first use; set `HPS_ROOT` to override the cache path.
-
-Key Components
---------------
-
-- `training/ppo/launch.py`  
-  - Reads YAML configs (e.g., `training/ppo/cfgs/sd15_parallel.yaml`), builds `EPDParamPolicy`, `EPDRolloutRunner`, `RewardHPS`, and `PPOTrainer`.  
-  - Writes logs to `<run_dir>/logs/metrics.jsonl` and checkpoints to `<run_dir>/checkpoints/`.
-
-- `training/ppo/rl_runner.EPDRolloutRunner`  
-  - Samples Dirichlet tables from the policy, wraps them as an EPD predictor, and invokes the Stable Diffusion model to generate images.
-
-- `training/ppo/policy.EPDParamPolicy`  
-  - Produces Dirichlet parameters for positions/weights per diffusion step and exposes `mean_table()` / `sample_table()` to convert them into predictor tables.
-
-- `training/ppo/export_epd_predictor`  
-  - CLI: `python -m training.ppo.export_epd_predictor <run_dir> --checkpoint checkpoints/policy-stepXXXXXX.pt`.  
-  - Outputs `export/network-snapshot-export-step*.pkl` (used by `sample.py`) and `export/training_options.json`.
-
-- `sample.py` / `sample_baseline.py`  
-  - `sample.py` loads an exported predictor and runs PPO-tuned sampling.  
-  - `sample_baseline.py` runs handcrafted solvers (DDIM/DPM2/EDM/iPNDM).  
-  - Both rely on `torch_utils.distributed` for multi-GPU launches via `torchrun`.
-
-Training Workflow
------------------
+This codebase mainly refers to the codebase of [EDM](https://github.com/NVlabs/edm) as the base environment and then add other required packages. 
 
 ```bash
-# Optional: create an initial predictor table
-python fake_train.py \
-  --num-steps 11 \
-  --num-points 2 \
-  --outdir exps/99999-ms_coco-11-20-epd-dpm-1-discrete \
-  --snapshot-step 99999
-
-# Run PPO (adjust nproc_per_node/ports as needed)
-torchrun --nproc_per_node=8 --master_port=59500 -m training.ppo.launch \
-  --config training/ppo/cfgs/sd15_parallel.yaml
-
-# Export predictor weights for sampling
-python -m training.ppo.export_epd_predictor \
-  exps/<run-id> \
-  --checkpoint checkpoints/policy-step008000.pt
+conda env create -f environment.yml -n edm
+conda activate edm
+pip install omegaconf
+pip install gdown
+conda install lightning -c conda-forge
+pip install git+https://github.com/openai/CLIP.git
+pip install transformers
+pip install taming-transformers
+pip install -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
+pip install kornia fairscale piq
+pip install accelerator
+pip install --upgrade diffusers[torch]
+cd src
+mkdir ms_coco
+cd ms_coco
+wget https://huggingface.co/dnwalkup/StableDiffusion-v1-Releases/resolve/main/v1-5-pruned-emaonly.ckpt
+python download_hpsv2_weights.py --version v2.1 #https://huggingface.co/xswu/HPSv2/blob/main/HPS_v2.1_compressed.pt
+cd ..
+mkdir weights
+cd weights
+# Download evaluators
+wget https://huggingface.co/haor/aesthetics/resolve/main/sac%2Blogos%2Bava1-l14-linearMSE.pth
+gdown 17qrK_aJkVNM75ZEvMEePpLj6L867MLkN
 ```
 
-Sampling Workflow
------------------
+## Implementation Guide
+
+- Run the commands in [launch.sh](./launch.sh) for RL pipeline and sampling.
+- Complete parameter descriptions are available in the next section.
+
+### Example Commands:
 
 ```bash
-# Baseline solvers
-python sample_baseline.py --sampler ddim \
-  --dataset-name ms_coco \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 16 \
-  --num-steps 37 --schedule-type time_uniform --schedule-rho 1.0 \
-  --outdir ./samples/test_ddim_nfe36
-
-# PPO / EPD sampling
-MASTER_PORT=29600 python sample.py \
-  --predictor_path exps/<run-id>/export/network-snapshot-export-step008000.pkl \
-  --prompt-file src/prompts/test.txt \
-  --seeds "0-999" \
-  --batch 16 \
-  --outdir ./samples/<your-exp>
+# RL training
+xxxxx
 ```
-
-Evaluation Workflow
--------------------
-
-Scoring scripts live under `training/ppo/scripts/` and share a uniform interface:
 
 ```bash
-python -m training.ppo.scripts.score_hps \
-  --images path/to/images \
-  --pattern "**/*.png" \
-  --prompts src/prompts/test.txt \
-  --weights weights/HPS_v2.1_compressed.pt \
-  --output-json results/<exp>-hps.json
+# Sampling
+xxxxx
 ```
 
-Available metrics:
+## Parameter Description
 
-| Script | Description |
-|--------|-------------|
-| `score_hps.py` | Human Preference Score v2 (same reward used during PPO). |
-| `score_clip.py` | CLIPScore. |
-| `score_aesthetic.py` | Aesthetic predictor (sac+logos+ava1). |
-| `score_pick.py` | PickScore. |
-| `score_imagereward.py` | ImageReward. |
-| `score_mps.py` | Multi-dimensional Preference Score (requires `MPS/trainer/models`). |
+| Category          | Parameter          | Default | Description |
+|-------------------|--------------------|---------|-------------|
+| **General Options** | `dataset_name`     | None    | Supported datasets: `['cifar10', 'ffhq', 'afhqv2', 'imagenet64', 'lsun_bedroom', 'imagenet256', 'lsun_bedroom_ldm', 'ms_coco']` |
+|                   | `predictor_path`   | None    | Path or experiment number of trained EPD predictor |
+|                   | `batch`            | 64      | Total batch size |
+|                   | `seeds`            | "0-63"  | Random seed range for image generation |
+|                   | `grid`             | False   | Organize output images in grid layout |
+|                   | `total_kimg`       | 10      | Training duration (in thousands of images) |
+|                   | `scale_dir`        | 0.05    | Gradient direction scale (`c_n` in paper). Range: `[1-scale_dir, 1+scale_dir]` |
+|                   | `scale_time`       | 0.05       | Input time scale (`a_n` in paper). Range: `[1-scale_time, 1+scale_time]` |
+| **Solver Flags**  | `sampler_stu`      | 'epd'   | Student solver: `['epd', 'ipndm']` |
+|                   | `sampler_tea`      | 'dpm'   | Teacher solver type |
+|                   | `num_steps`        | 4       | Initial timestamps for student solver. Final steps = `2*(num_steps-1)` (EPD inserts intermediate steps) |
+|                   | `M`                | 3       | Intermediate steps inserted between teacher solver steps |
+|                   | `afs`              | False   | Enable Accelerated First Step (saves initial model evaluation) |
+| **Schedule Flags**| `schedule_type`    | 'polynomial' | Time discretization: `['polynomial', 'logsnr', 'time_uniform', 'discrete']` |
+|                   | `schedule_rho`     | 7       | Time step exponent (required for `polynomial`, `time_uniform`, `discrete`) |
+| **Additional Flags** | `max_order`       | None    | Multi-step solver order: `1-4` for iPNDM, `1-3` for DPM-Solver++ |
+|                   | `predict_x0`       | True    | DPM-Solver++: Use data prediction formulation |
+|                   | `lower_order_final`| True    | DPM-Solver++: Reduce order at final sampling stages |
+| **Guidance Flags** | `guidance_type`    | None    | Guidance method: `['cg' (classifier), 'cfg' (classifier-free), 'uncond' (unconditional), None]` |
+|                   | `guidance_rate`    | None    | Guidance strength parameter |
+|                   | `prompt`           | None    | Text prompt for Stable Diffusion sampling |
 
-Each script prints summary statistics and writes them to JSON for downstream comparisons.
+### EPD Step Calculation
+When `num_steps=N`, total steps = `2*(N-1)` (EPD inserts intermediate steps)
 
-Customization Notes
--------------------
+## Pre-trained EPD Predictors
 
-- **Rewards**: see `training/ppo/reward_multi.py` to mix multiple metrics, or implement a new adapter following `RewardHPS`.  
-- **Prompts / Datasets**: current configs target MS-COCO / Stable Diffusion v1.5. To support other models, extend `sample.py` and `sample_baseline.py` with additional `create_model` branches.  
-- **Sampling scripts**: extend `sample.sh` with additional scorers or copy the commands into your own automation scripts; each scorer accepts `--output-json` for logging.
+We provide pre-trained EPD predictors for:
 
-Running `train.sh` and `sample.sh` is sufficient to reproduce the full training, sampling, and evaluation pipeline described above.
+- SD1.5
+- SD3-Medium (512*512)
+- SD3-Medium (1024*1024)
+
+The pre-trained EPD predictors are available in `./exp/`.
+
+## Citation
+If you find this repository useful, please consider citing the following paper:
+
+```
+
+```
