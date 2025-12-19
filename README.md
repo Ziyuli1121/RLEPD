@@ -34,20 +34,7 @@ gdown 17qrK_aJkVNM75ZEvMEePpLj6L867MLkN
 
 ## Implementation Guide
 
-- Run the commands in [launch.sh](./launch.sh) for RL pipeline and sampling.
-- Complete parameter descriptions are available in the next section.
-
-### Example Commands:
-
-```bash
-# RL training
-xxxxx
-```
-
-```bash
-# Sampling
-xxxxx
-```
+Run the commands in [launch.sh](./launch.sh) for RL training, sampling and evaluation.
 
 ## Parameter Description
 
@@ -65,15 +52,6 @@ xxxxx
 |                   | `sampler_tea`      | 'dpm'   | Teacher solver type |
 |                   | `num_steps`        | 4       | Initial timestamps for student solver. Final steps = `2*(num_steps-1)` (EPD inserts intermediate steps) |
 |                   | `M`                | 3       | Intermediate steps inserted between teacher solver steps |
-|                   | `afs`              | False   | Enable Accelerated First Step (saves initial model evaluation) |
-| **Schedule Flags**| `schedule_type`    | 'polynomial' | Time discretization: `['polynomial', 'logsnr', 'time_uniform', 'discrete']` |
-|                   | `schedule_rho`     | 7       | Time step exponent (required for `polynomial`, `time_uniform`, `discrete`) |
-| **Additional Flags** | `max_order`       | None    | Multi-step solver order: `1-4` for iPNDM, `1-3` for DPM-Solver++ |
-|                   | `predict_x0`       | True    | DPM-Solver++: Use data prediction formulation |
-|                   | `lower_order_final`| True    | DPM-Solver++: Reduce order at final sampling stages |
-| **Guidance Flags** | `guidance_type`    | None    | Guidance method: `['cg' (classifier), 'cfg' (classifier-free), 'uncond' (unconditional), None]` |
-|                   | `guidance_rate`    | None    | Guidance strength parameter |
-|                   | `prompt`           | None    | Text prompt for Stable Diffusion sampling |
 
 ### EPD Step Calculation
 When `num_steps=N`, total steps = `2*(N-1)` (EPD inserts intermediate steps)

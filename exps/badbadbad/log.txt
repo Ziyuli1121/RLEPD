@@ -1,3 +1,0 @@
-fake_train: generated snapshot with custom parameters.
-snapshot: network-snapshot-000005.pkl
-num_steps=7, num_points=2, seed=0
