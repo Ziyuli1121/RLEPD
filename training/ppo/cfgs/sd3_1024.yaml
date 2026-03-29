@@ -4,7 +4,7 @@ run:
   seed: 0
 
 data:
-  predictor_snapshot: "exps/20251210-011145-sd3_1024/export/network-snapshot-export-step007200.pkl"
+  predictor_snapshot: "exps/f1024/network-snapshot-000005.pkl"
   prompt_csv: null  # reuse MS-COCO prompts; adjust if you have custom prompt files
 
 model:
@@ -66,4 +66,4 @@ ppo:
 
 logging:
   log_interval: 1
-  save_interval: 100
+  save_interval: 200

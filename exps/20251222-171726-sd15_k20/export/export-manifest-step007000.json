@@ -1,0 +1,18 @@
+{
+  "run_dir": "/work/nvme/betk/zli42/RLEPD/exps/20251222-171726-sd15_k20",
+  "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/exps/20251222-171726-sd15_k20/checkpoints/policy-step007000.pt",
+  "export_step": 7000,
+  "timestamp": "2025-12-24T08:50:46.260239+00:00",
+  "sanitized_rows": {
+    "reordered": 0,
+    "adjusted": 0
+  },
+  "latest_metrics": {
+    "step": 8356,
+    "mixed_reward_mean": 0.22491455078125,
+    "mixed_reward_std": 0.04460805654525757,
+    "kl": 689.3946533203125,
+    "policy_loss": 0.032584115862846375,
+    "elapsed_sec": 120592.29489970207
+  }
+}

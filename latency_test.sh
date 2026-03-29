@@ -112,19 +112,19 @@ python latency_test.py \
   --predictor exps/latency/sd3-512_k1_nfe20/network-snapshot-000005.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds 0-99 \
-  --max-batch-size 4 \
-  --outdir ./latency_runs/sd3-512_k1_nfe20_b4 \
+  --max-batch-size 1 \
+  --outdir ./latency_runs/sd3-512_k1_nfe20_b1 \
   --sampler epd_parallel \
-  --latency-json ./latency_runs/sd3-512_k1_nfe20_b4/latency.json
+  --latency-json ./latency_runs/sd3-512_k1_nfe20_b1/latency.json
 
 python latency_test.py \
   --predictor exps/latency/sd3-512_k2_nfe20/network-snapshot-000005.pkl \
   --prompt-file src/prompts/test.txt \
   --seeds 0-99 \
-  --max-batch-size 4 \
-  --outdir ./latency_runs/sd3-512_k2_nfe20_b4 \
+  --max-batch-size 1 \
+  --outdir ./latency_runs/sd3-512_k2_nfe20_b1 \
   --sampler epd_parallel \
-  --latency-json ./latency_runs/sd3-512_k2_nfe20_b4/latency.json
+  --latency-json ./latency_runs/sd3-512_k2_nfe20_b1/latency.json
 
 python latency_test.py \
   --predictor exps/latency/sd3-512_k3_nfe20/network-snapshot-000005.pkl \

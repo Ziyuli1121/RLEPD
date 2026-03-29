@@ -237,6 +237,12 @@ def epd_sampler(
     return x_next, x_list
 
 #----------------------------------------------------------------------------
+import torch
+
+# 假设这些辅助函数在 solvers 或 context 中可用，这里保留原样调用
+# from solvers import get_schedule, init_hook, get_denoised, get_epd_prediction
+# import torch.distributed as dist 
+
 def epd_parallel_sampler(
     net, 
     latents, 
@@ -258,108 +264,142 @@ def epd_parallel_sampler(
     **kwargs
 ):
     """
+    EPD Parallel Sampler with pre-computed condition expansion optimization.
     """
     assert predictor is not None
 
+    # 1. 获取 num_points (假设整个采样过程中它是固定的)
+    try:
+        num_points = predictor.num_points
+    except:
+        num_points = predictor.module.num_points
+
+    # ----------------------------------------------------------------
+    # 【优化点 Start】：在循环外预先处理 Condition
+    # ----------------------------------------------------------------
+    backend_type = getattr(net, "backend", None)
+    
+    # 内部辅助函数：处理 SD3 复杂的 Conditioning 对象
+    def _repeat_sd3_condition(cond_obj, times):
+        if cond_obj is None: 
+            return None
+        # 延迟导入以避免非 SD3 环境报错
+        from models.backends.sd3_diffusers_backend import SD3Conditioning
+        
+        return SD3Conditioning(
+            prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
+            pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
+            negative_prompt_embeds=cond_obj.negative_prompt_embeds.repeat_interleave(times, dim=0) 
+            if cond_obj.negative_prompt_embeds is not None else None,
+            negative_pooled_prompt_embeds=cond_obj.negative_pooled_prompt_embeds.repeat_interleave(times, dim=0) 
+            if cond_obj.negative_pooled_prompt_embeds is not None else None,
+            guidance_scale=cond_obj.guidance_scale,
+            num_images_per_prompt=cond_obj.num_images_per_prompt,
+        )
+
+    # 默认指向原始引用
+    cond_flat = condition
+    uc_flat = unconditional_condition
+
+    # 只有当并行点数 > 1 时才执行内存复制和扩展
+    if num_points > 1:
+        if backend_type == "sd3":
+            cond_flat = _repeat_sd3_condition(condition, num_points)
+            uc_flat = _repeat_sd3_condition(unconditional_condition, num_points)
+        else:
+            if condition is not None:
+                cond_flat = condition.repeat_interleave(num_points, dim=0)
+            if unconditional_condition is not None:
+                uc_flat = unconditional_condition.repeat_interleave(num_points, dim=0)
+    # ----------------------------------------------------------------
+    # 【优化点 End】
+    # ----------------------------------------------------------------
+
     # Time step discretization.
     x_list = []
-    t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
-    backend_type = getattr(net, "backend", None)
-    # Main sampling loop.
+    # 注意：这里假设 get_schedule 可用
+    t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, 
+                           schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
+    
+    # Main sampling loop setup
     x_next = latents if backend_type == "sd3" else latents * t_steps[0]
     x_list.append(x_next)
     inters = [x_next.unsqueeze(0)]
+
+    # Main sampling loop.
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):                # 0, ..., N-1
         x_cur = x_next
+        
+        # Init Hook for Feature Extraction (Distillation logic)
         unet_enc_out, hook = init_hook(net, class_labels)
         
-        # Euler step.
+        # Euler step calculation
         use_afs = afs and (((not train) and i == 0) or (train and step_idx == 0))
         if use_afs:
             d_cur = x_cur / ((1 + t_cur**2).sqrt())
         else:
-            denoised = get_denoised(net, x_cur, t_cur, class_labels=class_labels, condition=condition, unconditional_condition=unconditional_condition)
+            # 这里的 condition 依然使用原始 batch_size 的 (未扩展的)
+            denoised = get_denoised(net, x_cur, t_cur, class_labels=class_labels, 
+                                    condition=condition, unconditional_condition=unconditional_condition)
             d_cur = (x_cur - denoised) / t_cur
 
         hook.remove()
         t_cur = t_cur.reshape(-1, 1, 1, 1)
         t_next = t_next.reshape(-1, 1, 1, 1)
 
-        try:
-            num_points = predictor.num_points
-        except:
-            num_points = predictor.module.num_points
-        
+        # Predictor Inference
         if step_idx is not None:
-            r_s, scale_dir_s, scale_time_s, weight_s = get_epd_prediction(predictor,
-                                                                step_idx, 
-                                                                net, unet_enc_out, 
-                                                                use_afs, batch_size=latents.shape[0])
+            r_s, scale_dir_s, scale_time_s, weight_s = get_epd_prediction(
+                predictor, step_idx, net, unet_enc_out, use_afs, batch_size=latents.shape[0]
+            )
         else:
-            r_s, scale_dir_s, scale_time_s, weight_s = get_epd_prediction(predictor, 
-                                                                i, 
-                                                                net, unet_enc_out, 
-                                                                use_afs, batch_size=latents.shape[0])
+            r_s, scale_dir_s, scale_time_s, weight_s = get_epd_prediction(
+                predictor, i, net, unet_enc_out, use_afs, batch_size=latents.shape[0]
+            )
         x_next = x_cur
 
+        # Verbose Logging
         if verbose:
+            # 假设 dist 和 print0 可用，如果不可用请注释掉或改为 print
+            try:
+                import torch.distributed as dist
+                print_fn = dist.print0 if hasattr(dist, 'print0') else print
+            except ImportError:
+                print_fn = print
+
             print_str = f'step {i}: |'
             for j in range(num_points):
                 print_str += f'r{j}: {r_s[0,j,0,0]:.5f} '
                 print_str += f'st{j}: {scale_time_s[0,j,0,0]:.5f} '
                 print_str += f'sd{j}: {scale_dir_s[0,j,0,0]:.5f} '
                 print_str += f'w{j}: {weight_s[0,j,:,:].mean().item():.5f} |'
-            dist.print0(print_str)
+            print_fn(print_str)
 
-        # SD3 uses flowmatch schedule starting at sigma=1: always use mid-point velocities (no K=1 shortcut).
+        # Calculate Mid-points (Parallel Evaluation)
         t_mid = (t_next ** r_s) * (t_cur ** (1 - r_s))
         x_mid = x_cur.unsqueeze(1) + (t_mid - t_cur).unsqueeze(-1) * d_cur.unsqueeze(1)
 
-        B, num_points, C, H, W = x_mid.shape
-        x_mid_flat = x_mid.view(B * num_points, C, H, W)
+        B, num_points_actual, C, H, W = x_mid.shape
+        x_mid_flat = x_mid.view(B * num_points_actual, C, H, W)
 
-        t_param = (scale_time_s * t_mid).view(B * num_points, 1, 1, 1)
+        t_param = (scale_time_s * t_mid).view(B * num_points_actual, 1, 1, 1)
 
-        def _repeat_sd3_condition(cond_obj, times):
-            if cond_obj is None:
-                return None
-            from models.backends.sd3_diffusers_backend import SD3Conditioning
-
-            return SD3Conditioning(
-                prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
-                pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
-                negative_prompt_embeds=cond_obj.negative_prompt_embeds.repeat_interleave(times, dim=0)
-                if cond_obj.negative_prompt_embeds is not None
-                else None,
-                negative_pooled_prompt_embeds=cond_obj.negative_pooled_prompt_embeds.repeat_interleave(times, dim=0)
-                if cond_obj.negative_pooled_prompt_embeds is not None
-                else None,
-                guidance_scale=cond_obj.guidance_scale,
-                num_images_per_prompt=cond_obj.num_images_per_prompt,
-            )
-
-        if backend_type == "sd3":
-            cond_flat = _repeat_sd3_condition(condition, num_points)
-            uc_flat = _repeat_sd3_condition(unconditional_condition, num_points)
-        else:
-            cond_flat = None
-            uc_flat = None
-            if condition is not None:
-                cond_flat = condition.repeat_interleave(num_points, dim=0)
-            if unconditional_condition is not None:
-                uc_flat = unconditional_condition.repeat_interleave(num_points, dim=0)
-
+        # ----------------------------------------------------------------
+        # 【优化应用】：直接使用预计算好的 Flat Condition
+        # ----------------------------------------------------------------
         denoised_t_mid_flat = get_denoised(
             net,
             x_mid_flat,
             t_param,
             class_labels=class_labels,
-            condition=cond_flat,
-            unconditional_condition=uc_flat,
+            condition=cond_flat,           # Changed: Use pre-computed
+            unconditional_condition=uc_flat, # Changed: Use pre-computed
         )
-        denoised_t_mid = denoised_t_mid_flat.view(B, num_points, C, H, W)
+        
+        denoised_t_mid = denoised_t_mid_flat.view(B, num_points_actual, C, H, W)
         d_mid = (x_mid - denoised_t_mid) / t_mid.unsqueeze(-1)
 
+        # Final Update Step
         if backend_type == "sd3":
             # Combine multi-point velocities then take a single Euler step on sigma grid.
             weights = (weight_s * scale_dir_s).unsqueeze(-1)
@@ -376,8 +416,10 @@ def epd_parallel_sampler(
         if return_inters:
             inters.append(x_next.unsqueeze(0))
 
+    # Denoise to zero (Optional post-processing)
     if denoise_to_zero:
-        x_next = get_denoised(net, x_next, t_next, class_labels=class_labels, condition=condition, unconditional_condition=unconditional_condition)
+        x_next = get_denoised(net, x_next, t_next, class_labels=class_labels, 
+                              condition=condition, unconditional_condition=unconditional_condition)
         if return_inters:
             inters.append(x_next.unsqueeze(0))
 
@@ -385,6 +427,7 @@ def epd_parallel_sampler(
         return torch.cat(inters, dim=0).to(latents.device)
     if train:
         return x_next, [], [], r_s, scale_dir_s, scale_time_s, weight_s
+    
     return x_next, x_list
 
 #----------------------------------------------------------------------------

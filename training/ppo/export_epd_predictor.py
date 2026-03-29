@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import pickle
 import re
 from dataclasses import dataclass
@@ -127,6 +128,12 @@ def _infer_policy_arch_from_state_dict(state_dict: Mapping[str, torch.Tensor]) -
     return arch
 
 
+def _infer_policy_scale_from_state_dict(state_dict: Mapping[str, torch.Tensor]) -> Tuple[bool, bool]:
+    use_scale_dir = "base_log_scale_dir" in state_dict
+    use_scale_time = "base_log_scale_time" in state_dict
+    return use_scale_dir, use_scale_time
+
+
 def _instantiate_policy(
     table: EPDTable,
     config: Mapping[str, object],
@@ -135,16 +142,23 @@ def _instantiate_policy(
 ) -> EPDParamPolicy:
     ppo_cfg = config.get("ppo", {}) if isinstance(config, Mapping) else {}
     dirichlet_c = float(ppo_cfg.get("dirichlet_concentration", 200.0))
+    scale_std = float(ppo_cfg.get("scale_std", 0.05))
 
     hidden_dim = 128
     num_layers = 2
     context_dim = 0
+    use_scale_dir = False
+    use_scale_time = False
 
     if isinstance(state_dict, Mapping):
         inferred = _infer_policy_arch_from_state_dict(state_dict)
         hidden_dim = int(inferred.get("hidden_dim", hidden_dim))
         num_layers = int(inferred.get("num_layers", num_layers))
         context_dim = int(inferred.get("context_dim", context_dim))
+        use_scale_dir, use_scale_time = _infer_policy_scale_from_state_dict(state_dict)
+    else:
+        use_scale_dir = bool(ppo_cfg.get("train_scale_dir", False) or table.scale_dir is not None)
+        use_scale_time = bool(ppo_cfg.get("train_scale_time", False) or table.scale_time is not None)
 
     init = build_dirichlet_params(table, concentration=dirichlet_c)
     policy = EPDParamPolicy(
@@ -154,6 +168,9 @@ def _instantiate_policy(
         num_layers=num_layers,
         context_dim=context_dim,
         dirichlet_init=init,
+        use_scale_dir=use_scale_dir,
+        use_scale_time=use_scale_time,
+        scale_log_std_init=math.log(scale_std),
     ).to(device)
     return policy
 
@@ -171,20 +188,45 @@ def _calc_policy_means(policy: EPDParamPolicy, device: torch.device) -> Tuple[to
     return positions, weights
 
 
+def _calc_policy_scales(
+    policy: EPDParamPolicy, device: torch.device
+) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor]]:
+    was_training = policy.training
+    policy = policy.to(device)
+    policy.eval()
+    with torch.no_grad():
+        step_idx = torch.arange(policy.num_steps - 1, device=device, dtype=torch.long)
+        output = policy(step_idx)
+        scale_dir, scale_time = policy.mean_scales(output)
+    if was_training:
+        policy.train()
+    return scale_dir, scale_time
+
+
 def _sanitize_tables(
     positions: torch.Tensor,
     weights: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor, Dict[str, int]]:
+    scale_dir: Optional[torch.Tensor] = None,
+    scale_time: Optional[torch.Tensor] = None,
+) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor], Dict[str, int]]:
     pos_np = positions.detach().cpu().numpy()
     weight_np = weights.detach().cpu().numpy()
-    pos_np, weight_np, _, _, reordered, adjusted = _sanitize_table_arrays(pos_np, weight_np)
+    scale_dir_np = scale_dir.detach().cpu().numpy() if scale_dir is not None else None
+    scale_time_np = scale_time.detach().cpu().numpy() if scale_time is not None else None
+    pos_np, weight_np, scale_dir_np, scale_time_np, reordered, adjusted = _sanitize_table_arrays(
+        pos_np, weight_np, scale_dir_np, scale_time_np
+    )
     meta = {
         "reordered_rows": int(np.count_nonzero(reordered)),
         "adjusted_rows": int(np.count_nonzero(adjusted)),
     }
     pos_tensor = torch.from_numpy(pos_np).to(positions.device)
     weight_tensor = torch.from_numpy(weight_np).to(weights.device)
-    return pos_tensor, weight_tensor, meta
+    scale_dir_tensor = torch.from_numpy(scale_dir_np).to(positions.device) if scale_dir_np is not None else None
+    scale_time_tensor = (
+        torch.from_numpy(scale_time_np).to(positions.device) if scale_time_np is not None else None
+    )
+    return pos_tensor, weight_tensor, scale_dir_tensor, scale_time_tensor, meta
 
 
 def _weights_to_logits(weights: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
@@ -195,6 +237,14 @@ def _weights_to_logits(weights: torch.Tensor, eps: float = 1e-6) -> torch.Tensor
 def _positions_to_logits(positions: torch.Tensor, eps: float = 1e-6) -> torch.Tensor:
     clamped = torch.clamp(positions, min=eps, max=1 - eps)
     return torch.logit(clamped)
+
+
+def _scale_to_params(scale: torch.Tensor, scale_range: float, eps: float = 1e-6) -> torch.Tensor:
+    if scale_range <= 0:
+        return torch.zeros_like(scale)
+    normalized = (scale - (1 - scale_range)) / (2 * scale_range)
+    normalized = torch.clamp(normalized, min=eps, max=1 - eps)
+    return 2.0 * torch.logit(normalized)
 
 
 def _prepare_pred_kwargs(
@@ -382,13 +432,18 @@ def export_policy_mean_to_predictor(
     policy.load_state_dict(state_dict, strict=True)
 
     positions, weights = _calc_policy_means(policy, torch_device)
-    positions, weights, sanitize_meta = _sanitize_tables(positions, weights)
+    scale_dir_mean, scale_time_mean = _calc_policy_scales(policy, torch_device)
+    positions, weights, scale_dir_mean, scale_time_mean, sanitize_meta = _sanitize_tables(
+        positions, weights, scale_dir_mean, scale_time_mean
+    )
 
     r_logits = _positions_to_logits(positions)
     weight_logits = _weights_to_logits(weights)
 
     base_options = _load_training_options_template(snapshot_path)
     pred_kwargs = _prepare_pred_kwargs(base_options, config_dict, table)
+    scale_dir_range = float(pred_kwargs.get("scale_dir", 0.0))
+    scale_time_range = float(pred_kwargs.get("scale_time", 0.0))
 
     predictor = _instantiate_predictor(pred_kwargs)
     predictor = predictor.to(torch_device)
@@ -396,9 +451,15 @@ def export_policy_mean_to_predictor(
         predictor.r_params.copy_(r_logits)
         predictor.weight_s.copy_(weight_logits)
         if hasattr(predictor, "scale_dir_params"):
-            predictor.scale_dir_params.zero_()
+            if scale_dir_mean is not None and scale_dir_range > 0:
+                predictor.scale_dir_params.copy_(_scale_to_params(scale_dir_mean, scale_dir_range))
+            else:
+                predictor.scale_dir_params.zero_()
         if hasattr(predictor, "scale_time_params"):
-            predictor.scale_time_params.zero_()
+            if scale_time_mean is not None and scale_time_range > 0:
+                predictor.scale_time_params.copy_(_scale_to_params(scale_time_mean, scale_time_range))
+            else:
+                predictor.scale_time_params.zero_()
 
     training_options = dict(base_options)
     training_options["pred_kwargs"] = pred_kwargs

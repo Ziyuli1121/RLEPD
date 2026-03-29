@@ -1,6 +1,4 @@
-## Parallel Diffusion Sampling with Low-Dimensional Alignment <br><sub>Official implementation</sub>
-
-**Abstract**: xxxxxxxxxxxxxxxxxxxx
+## Parallel Diffusion Solver via Residual Dirichlet Policy Optimization <br><sub>Official implementation</sub>
 
 ## Requirements
 
@@ -65,10 +63,3 @@ We provide pre-trained EPD predictors for:
 - SD3-Medium (1024*1024)
 
 The pre-trained EPD predictors are available in `./exp/`.
-
-## Citation
-If you find this repository useful, please consider citing the following paper:
-
-```
-
-```

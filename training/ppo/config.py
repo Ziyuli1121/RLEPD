@@ -169,6 +169,9 @@ class PPOConfig:
     decode_rgb: bool
     steps: int
     dirichlet_concentration: float
+    scale_std: float = 0.05
+    train_scale_dir: Optional[bool] = None
+    train_scale_time: Optional[bool] = None
 
 
 @dataclass
@@ -371,6 +374,13 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         cache_dir=cache_dir,
         multi=multi_cfg,
     )
+    train_scale_dir = ppo_raw.get("train_scale_dir")
+    if train_scale_dir is not None:
+        train_scale_dir = bool(train_scale_dir)
+    train_scale_time = ppo_raw.get("train_scale_time")
+    if train_scale_time is not None:
+        train_scale_time = bool(train_scale_time)
+
     ppo = PPOConfig(
         rollout_batch_size=int(ppo_raw.get("rollout_batch_size", 4)),
         rloo_k=int(ppo_raw.get("rloo_k", 2)),
@@ -386,6 +396,9 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
         decode_rgb=bool(ppo_raw.get("decode_rgb", True)),
         steps=int(ppo_raw.get("steps", 10)),
         dirichlet_concentration=float(ppo_raw.get("dirichlet_concentration", 200.0)),
+        scale_std=float(ppo_raw.get("scale_std", 0.05)),
+        train_scale_dir=train_scale_dir,
+        train_scale_time=train_scale_time,
     )
     logging = LoggingConfig(
         log_interval=int(logging_raw.get("log_interval", 1)),
@@ -412,6 +425,8 @@ def validate_config(config: FullConfig, check_paths: bool = True) -> None:
         raise ConfigError("reward.batch_size must be in (0, rollout_batch_size].")
     if config.ppo.steps <= 0:
         raise ConfigError("ppo.steps must be positive.")
+    if config.ppo.scale_std <= 0:
+        raise ConfigError("ppo.scale_std must be positive.")
     if check_paths:
         if not config.data.predictor_snapshot.is_file():
             raise ConfigError(f"Predictor snapshot not found: {config.data.predictor_snapshot}")

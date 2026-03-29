@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import random
 import sys
@@ -262,12 +263,30 @@ def main(argv: Optional[List[str]] = None) -> None:
             predictor_table,
             concentration=full_config.ppo.dirichlet_concentration,
         )
+        scale_dir_init = predictor_table.scale_dir
+        scale_time_init = predictor_table.scale_time
+        use_scale_dir = scale_dir_init is not None
+        use_scale_time = scale_time_init is not None
+        if full_config.ppo.train_scale_dir is not None:
+            use_scale_dir = full_config.ppo.train_scale_dir
+            if not use_scale_dir:
+                scale_dir_init = None
+        if full_config.ppo.train_scale_time is not None:
+            use_scale_time = full_config.ppo.train_scale_time
+            if not use_scale_time:
+                scale_time_init = None
+
         policy = EPDParamPolicy(
             num_steps=predictor_table.num_steps,
             num_points=predictor_table.num_points,
             hidden_dim=128,
             num_layers=2,
             dirichlet_init=dirichlet_init,
+            use_scale_dir=use_scale_dir,
+            use_scale_time=use_scale_time,
+            scale_dir_init=scale_dir_init,
+            scale_time_init=scale_time_init,
+            scale_log_std_init=math.log(full_config.ppo.scale_std),
         ).to(device)
 
         if distributed:

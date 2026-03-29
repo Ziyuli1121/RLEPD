@@ -4,7 +4,7 @@ run:
   seed: 0
 
 data:
-  predictor_snapshot: "exps/fake-sd3-11-512/network-snapshot-000005.pkl"
+  predictor_snapshot: "exps/f512/network-snapshot-000005.pkl"
   prompt_csv: null
 
 model:
@@ -66,4 +66,4 @@ ppo:
 
 logging:
   log_interval: 1
-  save_interval: 500
+  save_interval: 200

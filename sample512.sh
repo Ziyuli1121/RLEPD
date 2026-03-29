@@ -113,48 +113,48 @@ score_all_metrics() {
     python -m training.ppo.scripts.score_clip \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/clip \
         --output-json "results/${prefix}_clip.json"
 
     python -m training.ppo.scripts.score_hps \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/HPS_v2.1_compressed.pt \
         --output-json "results/${prefix}_hps.json"
 
     python -m training.ppo.scripts.score_aesthetic \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/sac+logos+ava1-l14-linearMSE.pth \
         --output-json "results/${prefix}_aesthetic.json"
 
     python -m training.ppo.scripts.score_pick \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/PickScore_v1 \
         --output-json "results/${prefix}_pick.json"
 
     python -m training.ppo.scripts.score_imagereward \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/ImageReward-v1.0.pt \
         --output-json "results/${prefix}_imagereward.json"
 
     python -m training.ppo.scripts.score_mps \
         --images "${image_dir}" \
         --pattern "**/*.png" \
-        --prompts src/prompts/test.txt \
+        --prompts src/prompts/test100.txt \
         --weights weights/MPS_overall_checkpoint.pth \
         --output-json "results/${prefix}_mps.json"
 }
 
 
-score_all_metrics sd3_epd_9_512_500
+score_all_metrics sd3_edm_28_512
 score_all_metrics sd3_epd_9_512_1000
 score_all_metrics sd3_epd_9_512_1500
 score_all_metrics sd3_epd_9_512_2450

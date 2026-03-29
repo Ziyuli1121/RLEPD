@@ -54,8 +54,8 @@
 python sample_sd3_baseline.py --sampler edm --resolution 512 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/test.txt \
-  --seeds "0-999" --batch 8 \
-  --num-steps 14 \
+  --seeds "0-99" --batch 8 \
+  --num-steps 2 \
   --outdir ./samples/sd3_edm_28_512
 
 python sample_sd3_baseline.py --sampler dpm2 --resolution 512 \

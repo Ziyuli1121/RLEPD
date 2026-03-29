@@ -4,7 +4,7 @@ run:
   seed: 0
 
 data:
-  predictor_snapshot: "exps/fake-sd15-11/network-snapshot-000005.pkl"
+  predictor_snapshot: "exps/f15/network-snapshot-000005.pkl"
   prompt_csv: null  # use default MS-COCO prompts when null
 
 model:
@@ -57,7 +57,11 @@ ppo:
   decode_rgb: true
   steps: 99999
   dirichlet_concentration: 20
+  # Enable hybrid policy: Dirichlet for r/w, log-normal for scale_dir/scale_time.
+  train_scale_dir: true
+  train_scale_time: true
+  scale_std: 0.05
 
 logging:
   log_interval: 1
-  save_interval: 500
+  save_interval: 1000

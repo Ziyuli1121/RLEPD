@@ -2,9 +2,11 @@
 python fake_train.py \
   --num-steps 11 \
   --num-points 2 \
-  --outdir exps/fake-sd15-11 \
+  --outdir exps/f15 \
   --r-base 0.5 \
-  --r-epsilon 0.33
+  --r-epsilon 0.33 \
+  --scale-dir 0.05 \
+  --scale-time 0.05
 
 
 # 开始RL训练
@@ -37,8 +39,8 @@ python -m training.ppo.export_epd_predictor \
 
 # sd3
 python fake_train.py \
-  --outdir exps/fake-sd3-11-512 \
-  --num-steps 12 \
+  --outdir exps/f512 \
+  --num-steps 11 \
   --num-points 2 \
   --guidance-rate 4.5 \
   --schedule-type flowmatch \
@@ -50,8 +52,8 @@ python fake_train.py \
   
 
 python fake_train.py \
-  --outdir exps/fake-sd3-11-1024-new \
-  --num-steps 12 \
+  --outdir exps/f1024 \
+  --num-steps 11 \
   --num-points 2 \
   --guidance-rate 4.5 \
   --schedule-type flowmatch \
@@ -62,25 +64,25 @@ python fake_train.py \
   --r-epsilon 0.33
 
 
-torchrun --master_port=22222 --nproc_per_node=1 -m training.ppo.launch \
+torchrun --master_port=33333 --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd3_512.yaml
 
-torchrun --master_port=12345 --nproc_per_node=1 -m training.ppo.launch \
+torchrun --master_port=44444 --nproc_per_node=1 -m training.ppo.launch \
     --config training/ppo/cfgs/sd3_1024.yaml
 
 # /work/nvme/betk/zli42/RLEPD/exps/20251204-144911-sd3_1024/logs/metrics.jsonl
 # /work/nvme/betk/zli42/RLEPD/exps/20251203-011623-sd3_512/logs/metrics.jsonl
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251214-012304-sd3_1024_continue/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251219-032038-sd3_512_new/logs/metrics.jsonl \
     --metrics hps_mean \
-    --smooth-window 200 \
-    --output exp_visuals/sd3_1024_continue/hps_mean.png
+    --smooth-window 1000 \
+    --output exp_visuals/512/hps_mean.png
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251214-012304-sd3_1024_continue/logs/metrics.jsonl \
-    --metrics kl \
-    --smooth-window 0 \
-    --output exp_visuals/sd3_1024_continue/kl.png
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251219-032043-sd3_1024_continue/logs/metrics.jsonl \
+    --metrics hps_mean \
+    --smooth-window 1000 \
+    --output exp_visuals/1024/hps_mean.png
 
 
 python -m training.ppo.export_epd_predictor \
