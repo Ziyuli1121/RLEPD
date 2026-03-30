@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/smoke_tests/flux_smoke_001/samples/flux",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/smoke_tests/flux_smoke_001/prompts/smoke_prompts_1.txt",
+  "stats": {
+    "count": 1,
+    "mean": 0.1640625,
+    "std": 0.0,
+    "min": 0.1640625,
+    "max": 0.1640625
+  },
+  "metadata": {
+    "duration": 53.71197319030762,
+    "num_images": 1,
+    "batch_size": 1,
+    "device": "cuda"
+  }
+}

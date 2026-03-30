@@ -6,6 +6,42 @@ from concurrent.futures import ThreadPoolExecutor
 from torch_utils import distributed as dist
 
 #----------------------------------------------------------------------------
+
+
+def _is_flowmatch_backend_name(backend_type):
+    return backend_type in FLOWMATCH_BACKENDS
+
+
+def _repeat_flowmatch_condition(net, cond_obj, times):
+    if cond_obj is None:
+        return None
+    backend_type = getattr(net, "backend", None)
+    if backend_type == "sd3":
+        from models.backends import SD3Conditioning
+
+        return SD3Conditioning(
+            prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
+            pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
+            negative_prompt_embeds=cond_obj.negative_prompt_embeds.repeat_interleave(times, dim=0)
+            if cond_obj.negative_prompt_embeds is not None else None,
+            negative_pooled_prompt_embeds=cond_obj.negative_pooled_prompt_embeds.repeat_interleave(times, dim=0)
+            if cond_obj.negative_pooled_prompt_embeds is not None else None,
+            guidance_scale=cond_obj.guidance_scale,
+            num_images_per_prompt=cond_obj.num_images_per_prompt,
+        )
+    if backend_type == "flux":
+        from models.backends import FluxConditioning
+
+        return FluxConditioning(
+            prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
+            pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
+            text_ids=cond_obj.text_ids,
+            guidance_scale=cond_obj.guidance_scale,
+            num_images_per_prompt=cond_obj.num_images_per_prompt,
+        )
+    return cond_obj
+
+#----------------------------------------------------------------------------
 # Initialize the hook function to get the U-Net bottleneck outputs
 
 def init_hook(net, class_labels=None):
@@ -13,7 +49,7 @@ def init_hook(net, class_labels=None):
     def hook_fn(module, input, output):
         unet_enc_out.append(output.detach())
     backend_type = getattr(net, "backend", None)
-    if backend_type == "sd3":
+    if _is_flowmatch_backend_name(backend_type):
         class _DummyHook:
             def remove(self):
                 return None
@@ -87,7 +123,7 @@ def get_epd_prediction(predictor, step_idx, net, unet_enc_out, use_afs, batch_si
 
 def get_denoised(net, x, t, class_labels=None, condition=None, unconditional_condition=None):
     backend_type = getattr(net, "backend", None)
-    if backend_type == "sd3":
+    if _is_flowmatch_backend_name(backend_type):
         return net(x, t, condition=condition)
     if hasattr(net, 'guidance_type'):     # models from LDM and Stable Diffusion
         denoised = net(x, t, condition=condition, unconditional_condition=unconditional_condition)
@@ -124,8 +160,8 @@ def epd_sampler(
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
     # Main sampling loop.
     backend_type = getattr(net, "backend", None)
-    # SD3 的 flowmatch 时间轴以 sigma=1 开始，无需额外缩放；其他后端保持旧行为。
-    if backend_type == "sd3":
+    # Flow-matching backends start on sigma=1 and do not multiply the initial latent by sigma.
+    if _is_flowmatch_backend_name(backend_type):
         x_next = latents
     else:
         x_next = latents * t_steps[0]
@@ -176,9 +212,9 @@ def epd_sampler(
                 print_str += f'w{j}: {weight_s[0,j,:,:].mean().item():.5f} |'
             dist.print0(print_str)
         
-        # Switch update rule for SD3 flowmatch: always use mid-point velocities (no K=1 shortcut).
+        # Flow-matching backends combine midpoint velocities on the sigma grid.
         backend_type = getattr(net, "backend", None)
-        if backend_type == "sd3":
+        if _is_flowmatch_backend_name(backend_type):
             v_combined = torch.zeros_like(x_cur)
             for j in range(num_points):
                 r = r_s[:, j : j + 1, :, :]
@@ -279,33 +315,15 @@ def epd_parallel_sampler(
     # ----------------------------------------------------------------
     backend_type = getattr(net, "backend", None)
     
-    # 内部辅助函数：处理 SD3 复杂的 Conditioning 对象
-    def _repeat_sd3_condition(cond_obj, times):
-        if cond_obj is None: 
-            return None
-        # 延迟导入以避免非 SD3 环境报错
-        from models.backends.sd3_diffusers_backend import SD3Conditioning
-        
-        return SD3Conditioning(
-            prompt_embeds=cond_obj.prompt_embeds.repeat_interleave(times, dim=0),
-            pooled_prompt_embeds=cond_obj.pooled_prompt_embeds.repeat_interleave(times, dim=0),
-            negative_prompt_embeds=cond_obj.negative_prompt_embeds.repeat_interleave(times, dim=0) 
-            if cond_obj.negative_prompt_embeds is not None else None,
-            negative_pooled_prompt_embeds=cond_obj.negative_pooled_prompt_embeds.repeat_interleave(times, dim=0) 
-            if cond_obj.negative_pooled_prompt_embeds is not None else None,
-            guidance_scale=cond_obj.guidance_scale,
-            num_images_per_prompt=cond_obj.num_images_per_prompt,
-        )
-
     # 默认指向原始引用
     cond_flat = condition
     uc_flat = unconditional_condition
 
     # 只有当并行点数 > 1 时才执行内存复制和扩展
     if num_points > 1:
-        if backend_type == "sd3":
-            cond_flat = _repeat_sd3_condition(condition, num_points)
-            uc_flat = _repeat_sd3_condition(unconditional_condition, num_points)
+        if _is_flowmatch_backend_name(backend_type):
+            cond_flat = _repeat_flowmatch_condition(net, condition, num_points)
+            uc_flat = _repeat_flowmatch_condition(net, unconditional_condition, num_points)
         else:
             if condition is not None:
                 cond_flat = condition.repeat_interleave(num_points, dim=0)
@@ -322,7 +340,7 @@ def epd_parallel_sampler(
                            schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
     
     # Main sampling loop setup
-    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     x_list.append(x_next)
     inters = [x_next.unsqueeze(0)]
 
@@ -400,7 +418,7 @@ def epd_parallel_sampler(
         d_mid = (x_mid - denoised_t_mid) / t_mid.unsqueeze(-1)
 
         # Final Update Step
-        if backend_type == "sd3":
+        if _is_flowmatch_backend_name(backend_type):
             # Combine multi-point velocities then take a single Euler step on sigma grid.
             weights = (weight_s * scale_dir_s).unsqueeze(-1)
             v_combined = (weights * d_mid).sum(dim=1)
@@ -453,7 +471,7 @@ def dpm_sampler(
     t_steps = get_schedule(num_steps, sigma_min, sigma_max, device=latents.device, schedule_type=schedule_type, schedule_rho=schedule_rho, net=net)
     backend_type = getattr(net, "backend", None)
     # Main sampling loop.
-    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = []
@@ -536,7 +554,7 @@ def dpm_sampler_2(
     else:
         t_steps = torch.as_tensor(t_steps, device=latents.device, dtype=latents.dtype)
 
-    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = [x_next]
@@ -628,7 +646,7 @@ def heun_sampler(
     )
     backend_type = getattr(net, "backend", None)
     # Main sampling loop.
-    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
 
     x_list = [x_next]
@@ -712,7 +730,7 @@ def ipndm_sampler(
     backend_type = getattr(net, "backend", None)
 
     # Main sampling loop.
-    x_next = latents if backend_type == "sd3" else latents * t_steps[0]
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     inters = [x_next.unsqueeze(0)]
     if not train:
         buffer_model = []
@@ -857,8 +875,8 @@ def edm_sampler(
     backend_type = getattr(net, "backend", None)
     round_sigma = getattr(net, "round_sigma", lambda x: x)
 
-    if backend_type == "sd3" and schedule_type == "flowmatch":
-        # Use SD3 flowmatch schedule from backend for compatibility with SD3 training.
+    if _is_flowmatch_backend_name(backend_type) and schedule_type == "flowmatch":
+        # Use backend flowmatch schedule for compatibility with runtime scheduler logic.
         t_steps = net.make_flowmatch_schedule(num_steps, device=device)
         t_steps = torch.cat([t_steps, torch.zeros_like(t_steps[:1])])
         x_next = latents.to(dtype)
@@ -874,21 +892,21 @@ def edm_sampler(
         ) ** rho
         t_steps = torch.cat([round_sigma(t_steps), torch.zeros_like(t_steps[:1])])
 
-        # For SD3, keep initial scaling consistent with flowmatch branch (no sigma multiply).
-        x_next = latents.to(dtype if backend_type == "sd3" else torch.float64)
-        if backend_type != "sd3":
+        # Flow-matching backends keep initial scaling consistent with the sigma=1 branch.
+        x_next = latents.to(dtype if _is_flowmatch_backend_name(backend_type) else torch.float64)
+        if not _is_flowmatch_backend_name(backend_type):
             x_next = x_next * t_steps[0]
 
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):
         t_cur_val = float(t_cur)
         t_next_val = float(t_next)
 
-        if backend_type == "sd3" and schedule_type == "flowmatch":
+        if _is_flowmatch_backend_name(backend_type) and schedule_type == "flowmatch":
             gamma = 0.0
             t_hat = t_cur
             t_hat_val = t_cur_val
             noise = torch.zeros_like(x_next)
-        elif backend_type == "sd3":
+        elif _is_flowmatch_backend_name(backend_type):
             gamma = 0.0
             t_hat = t_cur
             t_hat_val = t_cur_val
@@ -911,7 +929,7 @@ def edm_sampler(
             class_labels=class_labels,
             condition=condition,
             unconditional_condition=unconditional_condition,
-        ).to(torch.float64 if backend_type != "sd3" else dtype)
+        ).to(torch.float64 if not _is_flowmatch_backend_name(backend_type) else dtype)
 
         d_cur = (x_hat - denoised) / t_hat_val
         x_next = x_hat + (t_next_val - t_hat_val) * d_cur
@@ -927,7 +945,7 @@ def edm_sampler(
                 class_labels=class_labels,
                 condition=condition,
                 unconditional_condition=unconditional_condition,
-            ).to(torch.float64 if backend_type != "sd3" else dtype)
+            ).to(torch.float64 if not _is_flowmatch_backend_name(backend_type) else dtype)
             d_prime = (x_next - denoised_next) / t_next_val
             x_next = x_hat + (t_next_val - t_hat_val) * (0.5 * d_cur + 0.5 * d_prime)
 
@@ -975,7 +993,8 @@ def ddim_sampler(
         net=net,
     ).to(latents.dtype)
 
-    x_next = latents * t_steps[0]
+    backend_type = getattr(net, "backend", None)
+    x_next = latents if _is_flowmatch_backend_name(backend_type) else latents * t_steps[0]
     trajectory = [x_next.unsqueeze(0)] if return_inters else None
 
     for i, (t_cur, t_next) in enumerate(zip(t_steps[:-1], t_steps[1:])):

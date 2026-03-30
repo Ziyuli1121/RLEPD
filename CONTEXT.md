@@ -13,10 +13,10 @@ RLEPD is a reinforcement-learning pipeline for tuning an EPD-Solver table used i
 The fixed intended pipeline is:
 
 1. `fake_train.py` builds a cold-start `EPD_predictor` parameter table and fixes the planned inference step count.
-2. Choose a backbone: `sd1.5`, `sd3-512`, or `sd3-1024`.
+2. Choose a backbone: `sd1.5`, `sd3-512`, `sd3-1024`, or `flux`.
 3. Run RDPO/PPO training over the EPD table with `training/ppo/launch.py`.
 4. Export the trained policy mean back into predictor format with `training/ppo/export_epd_predictor.py`.
-5. Sample images with `sample.py` or `sample_sd3.py`.
+5. Sample images with `sample.py`, `sample_sd3.py`, `sample_flux.py`, or `sample_flux_baseline.py`.
 6. Evaluate images with `clip`, `hps`, `aesthetic`, `pickscore`, `imagereward`, and `mps`.
 
 The repo has been cleaned to make this pipeline statically closed without changing the public CLI contract or artifact formats.
@@ -49,13 +49,16 @@ Officially supported backbone workflows in the current repo:
 - `sd1.5`
 - `sd3-512`
 - `sd3-1024`
+- `flux` (`FLUX.1-dev`, 1024-only in this checkout)
 
 Important scope boundary:
 
 - This trimmed repository currently treats `ms_coco` as the supported dataset/task path.
 - Single-node GPU is the intended runtime.
 - The cleaned code supports static closure of the full pipeline.
-- As of 2026-03-29, a real smoke run has exercised cold-start, train, export, and sample for all three supported backbones, but not every metric/backbone combination or long-running training regime has been proven.
+- As of 2026-03-29, a real smoke run has exercised cold-start, train, export, and sample for `sd1.5`, `sd3-512`, and `sd3-1024`.
+- `flux` is now wired into the same pipeline, but its runtime still depends on an environment whose installed `diffusers` exposes `FluxPipeline`.
+- Not every metric/backbone combination or long-running training regime has been proven.
 
 ## 4. Fixed End-to-End Pipeline
 
@@ -64,7 +67,7 @@ Important scope boundary:
 | 1 | Build cold-start EPD table | `fake_train.py` | `network-snapshot-*.pkl` |
 | 2 | PPO / RDPO training | `python -m training.ppo.launch` | `checkpoints/policy-step*.pt` |
 | 3 | Export predictor | `python -m training.ppo.export_epd_predictor` | `export/network-snapshot-export-step*.pkl` |
-| 4 | Sample images | `sample.py` / `sample_sd3.py` | `samples/.../*.png` |
+| 4 | Sample images | `sample.py` / `sample_sd3.py` / `sample_flux.py` / `sample_flux_baseline.py` | `samples/.../*.png` |
 | 5 | Score quality | `training/ppo/scripts/score_*.py` | `results/*.json` |
 
 ### Stage 1: Cold Start
@@ -121,6 +124,7 @@ Important current configs:
 - `training/ppo/cfgs/sd15_k50.yaml`
 - `training/ppo/cfgs/sd3_512.yaml`
 - `training/ppo/cfgs/sd3_1024.yaml`
+- `training/ppo/cfgs/flux_dev.yaml`
 
 ### Stage 3: Export
 
@@ -153,7 +157,11 @@ Entrypoints:
 
 - `sample.py` for SD1.5 / legacy-style predictor replay
 - `sample_sd3.py` for SD3 EPD replay
-- `sample_baseline.py` and `sample_sd3_baseline.py` for baseline samplers
+- `sample_flux.py` for FLUX.1-dev EPD replay
+- `sample_baseline.py` for SD1.5 baseline samplers
+- `sample_sd3_baseline.py` for SD3 baseline samplers
+- `sample_flux_baseline.py` for FLUX baseline samplers
+- `compare_flux_euler.py` for internal FLUX Euler equivalence/debug comparisons
 
 Responsibilities:
 
@@ -166,6 +174,17 @@ Responsibilities:
 - Rebuild solver settings from predictor metadata.
 - Run the solver and decode images.
 - Write images into the standard `samples/` tree.
+
+Important FLUX-specific sampling note:
+
+- `sample_flux.py` is the FLUX EPD replay path.
+- `sample_flux_baseline.py` is the FLUX baseline path.
+- In this repo, "FLUX default Euler" means the official diffusers `FluxPipeline + FlowMatchEulerDiscreteScheduler`.
+- In this repo, the closest project-side Euler-style comparator is `ddim` with `schedule_type=flowmatch`, not `edm`.
+- Official FLUX Euler and `ddim(flowmatch)` should be treated as different baselines; use `compare_flux_euler.py` when that distinction matters.
+- FLUX baseline currently uses embedded `guidance_scale`; true CFG / negative prompt branches are intentionally not wired into the RLEPD FLUX path.
+- The official FLUX baseline path should treat `output_type="pt"` as an already postprocessed `[0, 1]` tensor.
+- The official FLUX baseline path should not be wrapped in the default CUDA autocast context; this checkout loads FLUX in BF16 and mismatched autocast can corrupt outputs.
 
 ### Stage 5: Evaluation
 
@@ -184,6 +203,8 @@ Responsibilities:
 - Resolve local weights first.
 - Fall back to remote downloads only if local weights are absent.
 - Emit JSON score summaries under `results/`.
+- `test_flux.sh` now generates a prompt subset file aligned to the sampled seeds before scoring, so its default `1 image` FLUX eval path is valid.
+- FLUX formal eval defaults to full metrics on the EPD sample and generation-only checks for baseline solver sweeps.
 
 ## 5. Core Algorithm Objects
 
@@ -430,12 +451,15 @@ Repo/runtime assumptions:
 - local vendored `taming-transformers` is preferred for SD1.5 runtime imports
 - local vendored `diffusers` is preferred only when the active Python version can import it safely
 - GPU execution is the intended path
+- FLUX formal single-node runs should prefer [environment.flux.yml](/work/nvme/betk/zli42/RLEPD/environment.flux.yml), which pins the validated Python 3.9 package family
 
 Important environment caveat:
 
 - The repo's vendored `diffusers` declares `python>=3.10`.
 - The current `epd` environment is Python 3.9.
 - On Python 3.9, `pipeline_utils.bootstrap_local_diffusers()` now prefers an installed site-packages `diffusers` if available instead of forcing the vendored tree.
+- FLUX formal scripts now run a dedicated runtime preflight that checks the known-good Python / torch / diffusers / transformers / hub package family, verifies local/remote model reachability, and confirms that the installed `diffusers` package contains the FLUX pipeline files required by this checkout.
+- `TEST.sh` now sources the shared pipeline helpers as well, so the FLUX smoke path uses the same runtime preflight and prompt-alignment helpers as `train.sh` / `test_flux.sh`.
 - During the 2026-03-29 smoke run, SD3 training and sampling succeeded in `epd` by using the installed `diffusers` package plus a local cached SD3 snapshot.
 - The SD3 model itself is still a gated Hugging Face asset. Real SD3 runtime requires either:
   - a local snapshot passed via `SD3_MODEL_PATH` or auto-discovered from cache
@@ -501,6 +525,7 @@ What has not been fully proven inside this context:
 - a long-running PPO training cycle beyond smoke scale
 - the PickScore code path in runtime, because local `weights/PickScore_v1` was absent during the validated smoke run
 - a full six-metric eval suite on `sd3_512` and `sd3_1024`, because `TEST.sh` currently runs lightweight HPS-only eval there
+- a full FLUX baseline solver matrix inside `TEST.sh`, because that sweep is now optional behind `FLUX_SOLVER_SWEEP=1`
 
 Future agents should distinguish among:
 
@@ -643,9 +668,12 @@ Sampling:
 
 - `sample.py`
 - `sample_sd3.py`
+- `sample_flux.py`
 - `sample_baseline.py`
 - `sample_sd3_baseline.py`
+- `sample_flux_baseline.py`
 - `models/backends/sd3_diffusers_backend.py`
+- `models/backends/flux_diffusers_backend.py`
 
 Evaluation:
 

@@ -8,11 +8,13 @@ PROMPT_FILE="${PROMPT_FILE:-${RLEPD_PROMPTS_TXT_DEFAULT}}"
 SEEDS="${SEEDS:-0-999}"
 SD15_RUN_NAME="${SD15_RUN_NAME:-sd15_k20}"
 SD3_1024_RUN_NAME="${SD3_1024_RUN_NAME:-sd3_1024_continue}"
+FLUX_RUN_NAME="${FLUX_RUN_NAME:-flux_dev}"
 
 # RL Train
 torchrun --master_port=23123 --nproc_per_node=1 -m training.ppo.launch --config training/ppo/cfgs/sd15_k20.yaml
 torchrun --master_port=22222 --nproc_per_node=1 -m training.ppo.launch --config training/ppo/cfgs/sd3_512.yaml
 torchrun --master_port=12345 --nproc_per_node=1 -m training.ppo.launch --config training/ppo/cfgs/sd3_1024.yaml
+torchrun --master_port=34567 --nproc_per_node=1 -m training.ppo.launch --config training/ppo/cfgs/flux_dev.yaml
 
 # Sample
 SD15_RUN_DIR="${SD15_RUN_DIR:-$(latest_run_dir "${SD15_RUN_NAME}" || true)}"
@@ -44,6 +46,21 @@ if [[ -n "${SD3_1024_PREDICTOR}" ]]; then
     --prompt "..."
 else
   echo "[launch.sh] Skip SD3 sample because no predictor was resolved." >&2
+fi
+
+FLUX_RUN_DIR="${FLUX_RUN_DIR:-$(latest_run_dir "${FLUX_RUN_NAME}" || true)}"
+FLUX_PREDICTOR="${FLUX_PREDICTOR:-}"
+if [[ -z "${FLUX_PREDICTOR}" && -n "${FLUX_RUN_DIR}" ]]; then
+  FLUX_PREDICTOR="$(resolve_export_predictor "${FLUX_RUN_DIR}" || true)"
+fi
+if [[ -n "${FLUX_PREDICTOR}" ]]; then
+  python sample_flux.py \
+    --predictor "${FLUX_PREDICTOR}" \
+    --seeds "0" \
+    --outdir output_images_flux \
+    --prompt "..."
+else
+  echo "[launch.sh] Skip FLUX sample because no predictor was resolved." >&2
 fi
 
 # Evaluation

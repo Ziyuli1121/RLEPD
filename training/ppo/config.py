@@ -421,12 +421,23 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
 
 
 def validate_config(config: FullConfig, check_paths: bool = True) -> None:
-    if config.model.backend.lower() == "sd3":
+    backend = config.model.backend.lower()
+    if backend == "sd3":
         res = config.model.resolution
         if res is None:
             res = config.model.backend_options.get("resolution") if isinstance(config.model.backend_options, dict) else None
         if res is not None and res not in (512, 1024):
             raise ConfigError("SD3 resolution must be 512 or 1024.")
+    if backend == "flux":
+        res = config.model.resolution
+        if res is None:
+            res = config.model.backend_options.get("resolution") if isinstance(config.model.backend_options, dict) else None
+        if res is not None and int(res) != 1024:
+            raise ConfigError("FLUX resolution must be 1024.")
+        if config.model.schedule_type.lower() != "flowmatch":
+            raise ConfigError("FLUX backend requires schedule_type=flowmatch.")
+        if config.model.guidance_type.lower() != "cfg":
+            raise ConfigError("FLUX backend currently requires guidance_type=cfg.")
     if config.ppo.rollout_batch_size <= 0:
         raise ConfigError("rollout_batch_size must be positive.")
     if config.ppo.rollout_batch_size % config.ppo.rloo_k != 0:

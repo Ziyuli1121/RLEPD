@@ -1,0 +1,18 @@
+{
+  "run_dir": "/work/nvme/betk/zli42/RLEPD/smoke_tests/flux_smoke_001/runs/20260329-224132-smoke_flux",
+  "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/smoke_tests/flux_smoke_001/runs/20260329-224132-smoke_flux/checkpoints/policy-step000010.pt",
+  "export_step": 10,
+  "timestamp": "2026-03-30T04:14:44.814217+00:00",
+  "sanitized_rows": {
+    "reordered": 0,
+    "adjusted": 0
+  },
+  "latest_metrics": {
+    "step": 10,
+    "mixed_reward_mean": 0.203369140625,
+    "mixed_reward_std": 0.009288981556892395,
+    "kl": 0.03143464773893356,
+    "policy_loss": 0.0,
+    "elapsed_sec": 170.99443101882935
+  }
+}

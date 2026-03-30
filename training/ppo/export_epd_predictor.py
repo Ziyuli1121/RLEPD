@@ -34,6 +34,7 @@ from training.ppo.cold_start import (
     build_dirichlet_params,
     load_predictor_table,
 )
+from training.ppo.pipeline_utils import resolve_flux_runtime_metadata
 from training.ppo.policy import EPDParamPolicy
 
 
@@ -56,6 +57,13 @@ class ExportResult:
 
 # ---------------------------------------------------------------------------
 # Core helpers
+
+
+def _first_non_none(*values):
+    for value in values:
+        if value is not None:
+            return value
+    return None
 
 
 def _load_resolved_config(run_dir: Path) -> Mapping[str, object]:
@@ -256,13 +264,54 @@ def _prepare_pred_kwargs(
     pred_kwargs.setdefault("class_name", "training.networks.EPD_predictor")
 
     model_cfg = run_config.get("model", {}) if isinstance(run_config, Mapping) else {}
+    table_meta = table.metadata if isinstance(table.metadata, Mapping) else {}
     pred_kwargs["num_steps"] = int(table.num_steps)
     pred_kwargs["num_points"] = int(table.num_points)
-    pred_kwargs["dataset_name"] = model_cfg.get("dataset_name", pred_kwargs.get("dataset_name"))
-    pred_kwargs["guidance_type"] = model_cfg.get("guidance_type", pred_kwargs.get("guidance_type"))
-    pred_kwargs["guidance_rate"] = model_cfg.get("guidance_rate", pred_kwargs.get("guidance_rate"))
-    pred_kwargs["schedule_type"] = model_cfg.get("schedule_type", pred_kwargs.get("schedule_type"))
-    pred_kwargs["schedule_rho"] = model_cfg.get("schedule_rho", pred_kwargs.get("schedule_rho"))
+    pred_kwargs["dataset_name"] = _first_non_none(
+        model_cfg.get("dataset_name"),
+        pred_kwargs.get("dataset_name"),
+        table_meta.get("dataset_name"),
+    )
+    pred_kwargs["guidance_type"] = _first_non_none(
+        model_cfg.get("guidance_type"),
+        pred_kwargs.get("guidance_type"),
+        table_meta.get("guidance_type"),
+    )
+    pred_kwargs["guidance_rate"] = _first_non_none(
+        model_cfg.get("guidance_rate"),
+        pred_kwargs.get("guidance_rate"),
+        table_meta.get("guidance_rate"),
+    )
+    pred_kwargs["schedule_type"] = _first_non_none(
+        model_cfg.get("schedule_type"),
+        pred_kwargs.get("schedule_type"),
+        table_meta.get("schedule_type"),
+    )
+    pred_kwargs["schedule_rho"] = _first_non_none(
+        model_cfg.get("schedule_rho"),
+        pred_kwargs.get("schedule_rho"),
+        table_meta.get("schedule_rho"),
+    )
+    pred_kwargs["sigma_min"] = _first_non_none(
+        model_cfg.get("sigma_min"),
+        pred_kwargs.get("sigma_min"),
+        table_meta.get("sigma_min"),
+    )
+    pred_kwargs["sigma_max"] = _first_non_none(
+        model_cfg.get("sigma_max"),
+        pred_kwargs.get("sigma_max"),
+        table_meta.get("sigma_max"),
+    )
+    pred_kwargs["flowmatch_mu"] = _first_non_none(
+        model_cfg.get("flowmatch_mu"),
+        pred_kwargs.get("flowmatch_mu"),
+        table_meta.get("flowmatch_mu"),
+    )
+    pred_kwargs["flowmatch_shift"] = _first_non_none(
+        model_cfg.get("flowmatch_shift"),
+        pred_kwargs.get("flowmatch_shift"),
+        table_meta.get("flowmatch_shift"),
+    )
     pred_kwargs["afs"] = bool(pred_kwargs.get("afs", False))
     pred_kwargs["scale_dir"] = float(pred_kwargs.get("scale_dir", 0.0))
     pred_kwargs["scale_time"] = float(pred_kwargs.get("scale_time", 0.0))
@@ -274,7 +323,7 @@ def _prepare_pred_kwargs(
     pred_kwargs["alpha"] = pred_kwargs.get("alpha", 10.0)
     pred_kwargs["fcn"] = bool(pred_kwargs.get("fcn", False))
     pred_kwargs["max_order"] = pred_kwargs.get("max_order", 2)
-    backend = model_cfg.get("backend", pred_kwargs.get("backend", "ldm"))
+    backend = _first_non_none(model_cfg.get("backend"), pred_kwargs.get("backend"), table_meta.get("backend"), "ldm")
     if backend is None:
         backend = "ldm"
     pred_kwargs["backend"] = str(backend)
@@ -285,7 +334,12 @@ def _prepare_pred_kwargs(
         raise ExportError("model.backend_options must be a mapping when provided.")
     else:
         backend_options = dict(backend_options)
-    res_meta = model_cfg.get("resolution") if isinstance(model_cfg, Mapping) else None
+    res_meta = _first_non_none(
+        model_cfg.get("resolution") if isinstance(model_cfg, Mapping) else None,
+        pred_kwargs.get("img_resolution"),
+        table_meta.get("img_resolution"),
+        table_meta.get("resolution"),
+    )
     if res_meta is not None:
         try:
             backend_options.setdefault("resolution", int(res_meta))
@@ -293,12 +347,27 @@ def _prepare_pred_kwargs(
             raise ExportError("model.resolution must be an integer when provided.")
     pred_kwargs["backend_config"] = backend_options
     if res_meta is None:
-        res_meta = backend_options.get("resolution")
+        res_meta = _first_non_none(backend_options.get("resolution"), table_meta.get("img_resolution"), table_meta.get("resolution"))
     if res_meta is not None:
         try:
             pred_kwargs["img_resolution"] = int(res_meta)
         except Exception:
             raise ExportError("model.resolution must be an integer when provided.")
+    if str(pred_kwargs["backend"]).lower() == "flux":
+        resolved_flux = resolve_flux_runtime_metadata(
+            backend_options=backend_options,
+            resolution=_first_non_none(pred_kwargs.get("img_resolution"), table_meta.get("img_resolution"), table_meta.get("resolution")),
+            sigma_min=_first_non_none(pred_kwargs.get("sigma_min"), table_meta.get("sigma_min")),
+            sigma_max=_first_non_none(pred_kwargs.get("sigma_max"), table_meta.get("sigma_max")),
+            flowmatch_mu=_first_non_none(pred_kwargs.get("flowmatch_mu"), table_meta.get("flowmatch_mu")),
+            flowmatch_shift=_first_non_none(pred_kwargs.get("flowmatch_shift"), table_meta.get("flowmatch_shift")),
+        )
+        pred_kwargs["backend_config"] = dict(resolved_flux["backend_options"])
+        pred_kwargs["img_resolution"] = resolved_flux["resolution"]
+        pred_kwargs["sigma_min"] = resolved_flux["sigma_min"]
+        pred_kwargs["sigma_max"] = resolved_flux["sigma_max"]
+        pred_kwargs["flowmatch_mu"] = resolved_flux["flowmatch_mu"]
+        pred_kwargs["flowmatch_shift"] = resolved_flux["flowmatch_shift"]
     return pred_kwargs
 
 
@@ -460,6 +529,10 @@ def export_policy_mean_to_predictor(
                 predictor.scale_time_params.copy_(_scale_to_params(scale_time_mean, scale_time_range))
             else:
                 predictor.scale_time_params.zero_()
+    predictor.sigma_min = pred_kwargs.get("sigma_min")
+    predictor.sigma_max = pred_kwargs.get("sigma_max")
+    predictor.flowmatch_mu = pred_kwargs.get("flowmatch_mu")
+    predictor.flowmatch_shift = pred_kwargs.get("flowmatch_shift")
 
     training_options = dict(base_options)
     training_options["pred_kwargs"] = pred_kwargs

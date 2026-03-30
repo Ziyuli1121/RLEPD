@@ -8,10 +8,12 @@ This repository uses [EDM](https://github.com/NVlabs/edm) as the base training s
 
 The current code expects:
 
-- Python `3.10`
+- Python `3.10` for the generic repo path that relies on the vendored `diffusers/`
 - PyTorch `2.x`
 - single-node GPU execution for training / sampling
 - local evaluation weights under `./weights`
+
+For FLUX.1-dev formal single-node runs, this checkout also maintains a validated Python `3.9` path via [environment.flux.yml](./environment.flux.yml), using an installed `diffusers` package that already exposes `FluxPipeline`.
 
 The bundled `diffusers/` and `HPSv2/` directories are auto-discovered by the updated code paths. You do not need to set `PYTHONPATH` manually for them.
 
@@ -48,16 +50,47 @@ Optional:
 1. Generate a cold-start EPD table with `fake_train.py`
 2. Run RDPO training with `python -m training.ppo.launch`
 3. Export the trained policy mean with `python -m training.ppo.export_epd_predictor`
-4. Sample with `sample.py` or `sample_sd3.py`
+4. Sample with `sample.py`, `sample_sd3.py`, `sample_flux.py`, or `sample_flux_baseline.py`
 5. Evaluate with the score CLIs or the helper shell scripts
 
 Useful entry scripts:
 
 - [train.sh](./train.sh): cold-start + RL train + export examples
 - [launch.sh](./launch.sh): end-to-end launch examples
+- [sample_flux.sh](./sample_flux.sh): FLUX.1-dev EPD replay example
+- [sample_flux_baseline.sh](./sample_flux_baseline.sh), [test_flux.sh](./test_flux.sh): FLUX.1-dev baseline/formal-eval examples
+- [compare_flux_euler.py](./compare_flux_euler.py): internal debug helper for comparing official FLUX Euler vs RLEPD `ddim(flowmatch)`
 - [sample.sh](./sample.sh), [sample512.sh](./sample512.sh), [sample1024.sh](./sample1024.sh): sampling + scoring examples
 - [test_regression.sh](./test_regression.sh): official regression-style `export -> sample -> score`
 - [test_15.sh](./test_15.sh), [test_512.sh](./test_512.sh), [test_1024.sh](./test_1024.sh): experiment-specific loops
+- [TEST.sh](./TEST.sh): GPU smoke test for `sd1.5`, `sd3-512`, `sd3-1024`, and `flux`
+- [environment.flux.yml](./environment.flux.yml): pinned FLUX single-node runtime based on the validated `epd` environment
+
+## FLUX.1-dev Notes
+
+- Supported FLUX variant in this checkout: `black-forest-labs/FLUX.1-dev`
+- Resolution is fixed to `1024x1024`
+- EPD replay entrypoint is [sample_flux.py](./sample_flux.py)
+- Baseline sampler entrypoint is [sample_flux_baseline.py](./sample_flux_baseline.py)
+- Official FLUX Euler baseline means the native diffusers `FluxPipeline + FlowMatchEulerDiscreteScheduler`
+- In this repo, the closest project-side Euler-style comparator is `ddim` with `schedule_type=flowmatch`
+- Training config is [training/ppo/cfgs/flux_dev.yaml](./training/ppo/cfgs/flux_dev.yaml)
+- FLUX reuses the same RDPO/PPO/export pipeline as SD1.5 and SD3
+- Current FLUX guidance in this repo uses embedded `guidance_scale=3.5`; true CFG / negative prompt branches are not wired into the RLEPD FLUX path
+- FLUX artifacts are expected to carry concrete `sigma_min / sigma_max / flowmatch_mu / flowmatch_shift` metadata; the formal FLUX path no longer relies on runtime-only schedule derivation for new artifacts
+- On Python `3.9`, the FLUX path requires an installed `diffusers` that already exposes `FluxPipeline`
+- If your Python `3.9` environment does not provide `FluxPipeline`, run FLUX with Python `3.10+` and the repo's newer vendored `diffusers`
+- The official FLUX baseline path should treat `output_type="pt"` as an already postprocessed `[0, 1]` tensor; do not re-normalize it
+- Do not wrap the official FLUX pipeline call in the default CUDA autocast context; this checkout loads FLUX in BF16 and mismatched autocast can produce invalid outputs
+- `test_flux.sh` is the formal FLUX evaluation wrapper:
+  - it exports the latest predictor
+  - samples FLUX EPD images
+  - aligns prompt count to the requested seeds
+  - runs full `clip / hps / aesthetic / imagereward / mps` on the EPD sample
+  - runs `PickScore` only when local weights exist or `ENABLE_PICKSCORE_DOWNLOAD=1`
+  - baseline solver sweep remains generation-only by default
+- FLUX runtime preflight is intentionally lightweight: it checks the known-good package family, local/remote model reachability, and that the installed `diffusers` package contains the FLUX pipeline files needed by this checkout
+- Treat official FLUX Euler and project-side `ddim(flowmatch)` as different baselines; they are close, but not strictly equivalent
 
 ## Parameter Description
 
@@ -86,5 +119,6 @@ We provide pre-trained EPD predictors for:
 - SD1.5
 - SD3-Medium (512*512)
 - SD3-Medium (1024*1024)
+- FLUX.1-dev (1024*1024)
 
 The exported and pre-generated predictors in this checkout live under `./exps/`.

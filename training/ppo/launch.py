@@ -18,6 +18,7 @@ from torch.nn.parallel import DistributedDataParallel
 
 from . import config as cfg
 from .cold_start import build_dirichlet_params, load_predictor_table
+from .pipeline_utils import resolve_flux_runtime_metadata
 from .policy import EPDParamPolicy
 from .ppo_trainer import PPOTrainer, PPOTrainerConfig
 from .rl_runner import EPDRolloutRunner, RLRunnerConfig
@@ -320,6 +321,32 @@ def main(argv: Optional[List[str]] = None) -> None:
             device=device,
         )
         full_config.model.backend_options = backend_config
+        if str(full_config.model.backend).lower() == "flux":
+            resolved_flux = resolve_flux_runtime_metadata(
+                backend_options=backend_config,
+                resolution=full_config.model.resolution or getattr(net, "output_resolution", None),
+                sigma_min=full_config.model.sigma_min if full_config.model.sigma_min is not None else getattr(net, "sigma_min", None),
+                sigma_max=full_config.model.sigma_max if full_config.model.sigma_max is not None else getattr(net, "sigma_max", None),
+                flowmatch_mu=(
+                    full_config.model.flowmatch_mu
+                    if full_config.model.flowmatch_mu is not None
+                    else getattr(net, "default_flowmatch_mu", None)
+                ),
+                flowmatch_shift=(
+                    full_config.model.flowmatch_shift
+                    if full_config.model.flowmatch_shift is not None
+                    else getattr(net, "flow_shift", None)
+                ),
+            )
+            full_config.model.resolution = resolved_flux["resolution"]
+            full_config.model.sigma_min = resolved_flux["sigma_min"]
+            full_config.model.sigma_max = resolved_flux["sigma_max"]
+            full_config.model.flowmatch_mu = resolved_flux["flowmatch_mu"]
+            full_config.model.flowmatch_shift = resolved_flux["flowmatch_shift"]
+            full_config.model.backend_options = dict(resolved_flux["backend_options"])
+            backend_config = dict(full_config.model.backend_options)
+        if is_master:
+            save_config_snapshot(full_config)
         if is_master:
             print("[Launch] Stable Diffusion model loaded.")
         net = net.to(device)

@@ -20,6 +20,7 @@ except ModuleNotFoundError as exc:
     ) from exc
 
 from training.networks import EPD_predictor
+from training.ppo.pipeline_utils import FLUX_DEFAULT_MODEL_ID, resolve_flux_runtime_metadata
 
 # FlowMatch Euler defaults used by SD3 scheduler (shift=3.0)
 SD3_FLOWMATCH_SIGMA_MIN = 0.0029940119760479044
@@ -189,7 +190,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip writing training_options.json even though defaults are provided.",
     )
-    parser.add_argument("--backend", type=str, default="ldm", help="Backend identifier, e.g., 'ldm' or 'sd3'.")
+    parser.add_argument("--backend", type=str, default="ldm", help="Backend identifier, e.g., 'ldm', 'sd3', or 'flux'.")
     parser.add_argument(
         "--backend-options",
         type=str,
@@ -201,7 +202,7 @@ def parse_args() -> argparse.Namespace:
         type=int,
         choices=[512, 1024],
         default=1024,
-        help="Target image resolution for SD3 backends.",
+        help="Target image resolution for flow-matching backends.",
     )
     parser.add_argument(
         "--sigma-min",
@@ -247,6 +248,13 @@ def _validate_args(args: argparse.Namespace) -> None:
             args.sigma_min = SD3_FLOWMATCH_SIGMA_MIN
         if args.sigma_max is None:
             args.sigma_max = SD3_FLOWMATCH_SIGMA_MAX
+    elif backend == "flux":
+        if args.guidance_type != "cfg":
+            raise ValueError("FLUX backend currently requires --guidance-type cfg.")
+        if args.schedule_type != "flowmatch":
+            raise ValueError("FLUX backend requires --schedule-type flowmatch.")
+        if int(args.resolution) != 1024:
+            raise ValueError("FLUX backend currently requires --resolution 1024.")
 
 
 def _ensure_monotonic(row: np.ndarray, min_gap: float = 1e-4) -> np.ndarray:
@@ -398,6 +406,22 @@ def main() -> None:
         backend_options.setdefault("flowmatch_mu", args.flowmatch_mu)
     if args.flowmatch_shift is not None:
         backend_options.setdefault("flowmatch_shift", args.flowmatch_shift)
+    if (args.backend or "ldm").lower() == "flux":
+        resolved_flux = resolve_flux_runtime_metadata(
+            backend_options=backend_options,
+            resolution=args.resolution,
+            sigma_min=args.sigma_min,
+            sigma_max=args.sigma_max,
+            flowmatch_mu=args.flowmatch_mu,
+            flowmatch_shift=args.flowmatch_shift,
+        )
+        backend_options = dict(resolved_flux["backend_options"])
+        args.resolution = resolved_flux["resolution"]
+        args.sigma_min = resolved_flux["sigma_min"]
+        args.sigma_max = resolved_flux["sigma_max"]
+        args.flowmatch_mu = resolved_flux["flowmatch_mu"]
+        args.flowmatch_shift = resolved_flux["flowmatch_shift"]
+        backend_options.setdefault("model_name_or_path", FLUX_DEFAULT_MODEL_ID)
     backend_options.setdefault("resolution", args.resolution)
 
     outdir_raw = Path(args.outdir)
@@ -498,8 +522,13 @@ def main() -> None:
                 "max_order": config.max_order,
                 "predict_x0": config.predict_x0,
                 "lower_order_final": config.lower_order_final,
+                "img_resolution": config.resolution,
                 "backend": config.backend,
                 "backend_config": config.backend_options,
+                "sigma_min": config.sigma_min,
+                "sigma_max": config.sigma_max,
+                "flowmatch_mu": config.flowmatch_mu,
+                "flowmatch_shift": config.flowmatch_shift,
             },
             "optimizer_kwargs": {
                 "class_name": "torch.optim.Adam",

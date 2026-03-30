@@ -5,7 +5,7 @@ import importlib.util
 import re
 import sys
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -13,6 +13,28 @@ EXPS_ROOT = REPO_ROOT / "exps"
 WEIGHTS_ROOT = REPO_ROOT / "weights"
 DEFAULT_PROMPTS_TXT = REPO_ROOT / "src" / "prompts" / "test.txt"
 DEFAULT_PROMPTS_CSV = REPO_ROOT / "src" / "prompts" / "MS-COCO_val2014_30k_captions.csv"
+FLUX_DEFAULT_MODEL_ID = "black-forest-labs/FLUX.1-dev"
+FLUX_DEFAULT_RESOLUTION = 1024
+FLUX_DEFAULT_SIGMA_MIN = 0.001
+FLUX_DEFAULT_SIGMA_MAX = 1.0
+FLUX_DEFAULT_FLOWMATCH_SHIFT = 3.0
+FLUX_DEFAULT_BASE_SEQ_LEN = 256
+FLUX_DEFAULT_MAX_SEQ_LEN = 4096
+FLUX_DEFAULT_BASE_SHIFT = 0.5
+FLUX_DEFAULT_MAX_SHIFT = 1.15
+FLUX_DEFAULT_TORCH_DTYPE = "bfloat16"
+FLUX_DEFAULT_ENABLE_MODEL_CPU_OFFLOAD = False
+
+FLUX_RUNTIME_VERSION_SPECS = {
+    "python_prefix": "3.9.",
+    "torch_prefix": "2.8.",
+    "torchvision_prefix": "0.23.",
+    "diffusers_prefix": "0.36.",
+    "transformers_prefix": "4.57.",
+    "huggingface_hub_prefix": "0.36.",
+    "accelerate_prefix": "1.10.",
+    "safetensors_prefix": "0.7.",
+}
 
 
 _WEIGHT_ALIASES = {
@@ -25,6 +47,8 @@ _WEIGHT_ALIASES = {
 }
 
 _PROMPT_COLUMNS = ("text", "prompt", "caption")
+
+_SEED_RANGE_RE = re.compile(r"^(\d+)-(\d+)$")
 
 
 def bootstrap_local_diffusers() -> None:
@@ -140,6 +164,132 @@ def repeat_to_length(items: Sequence[str], count: int) -> List[str]:
         raise ValueError("items must not be empty")
     repeats = (count + len(items) - 1) // len(items)
     return (list(items) * repeats)[:count]
+
+
+def parse_seed_spec(spec: str | Sequence[int]) -> List[int]:
+    if isinstance(spec, (list, tuple)):
+        return [int(seed) for seed in spec]
+    raw = str(spec).strip()
+    if not raw:
+        raise ValueError("seed spec is empty")
+    seeds: List[int] = []
+    for part in raw.split(","):
+        item = part.strip()
+        if not item:
+            continue
+        match = _SEED_RANGE_RE.match(item)
+        if match:
+            start = int(match.group(1))
+            end = int(match.group(2))
+            if end < start:
+                raise ValueError(f"invalid seed range '{item}'")
+            seeds.extend(range(start, end + 1))
+        else:
+            seeds.append(int(item))
+    if not seeds:
+        raise ValueError("seed spec produced no seeds")
+    return seeds
+
+
+def write_prompt_lines(path: Path | str, prompts: Sequence[str]) -> Path:
+    target = Path(path).expanduser()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w", encoding="utf-8") as handle:
+        for prompt in prompts:
+            handle.write(f"{str(prompt).strip()}\n")
+    return target.resolve()
+
+
+def aligned_prompt_subset(
+    path: Path | str,
+    *,
+    count: int,
+    start: int = 0,
+) -> List[str]:
+    prompts = load_prompts_file(path)
+    return prompt_slice(prompts, start=start, size=count)
+
+
+def flux_latent_resolution(resolution: int = FLUX_DEFAULT_RESOLUTION, vae_scale_factor: int = 8) -> int:
+    if int(resolution) != FLUX_DEFAULT_RESOLUTION:
+        raise ValueError(f"FLUX resolution must be {FLUX_DEFAULT_RESOLUTION}, got {resolution}")
+    return 2 * (int(resolution) // (vae_scale_factor * 2))
+
+
+def calculate_flux_mu(
+    resolution: int = FLUX_DEFAULT_RESOLUTION,
+    *,
+    base_seq_len: int = FLUX_DEFAULT_BASE_SEQ_LEN,
+    max_seq_len: int = FLUX_DEFAULT_MAX_SEQ_LEN,
+    base_shift: float = FLUX_DEFAULT_BASE_SHIFT,
+    max_shift: float = FLUX_DEFAULT_MAX_SHIFT,
+) -> float:
+    latent_resolution = flux_latent_resolution(resolution)
+    image_seq_len = (latent_resolution // 2) * (latent_resolution // 2)
+    slope = (max_shift - base_shift) / (max_seq_len - base_seq_len)
+    intercept = base_shift - slope * base_seq_len
+    return float(image_seq_len * slope + intercept)
+
+
+def resolve_flux_runtime_metadata(
+    *,
+    backend_options: Optional[Mapping[str, Any]] = None,
+    resolution: Optional[int] = None,
+    sigma_min: Optional[float] = None,
+    sigma_max: Optional[float] = None,
+    flowmatch_mu: Optional[float] = None,
+    flowmatch_shift: Optional[float] = None,
+) -> Dict[str, Any]:
+    cfg: Dict[str, Any] = dict(backend_options or {})
+    resolved_resolution = int(
+        resolution
+        if resolution is not None
+        else cfg.get("resolution", FLUX_DEFAULT_RESOLUTION)
+    )
+    if resolved_resolution != FLUX_DEFAULT_RESOLUTION:
+        raise ValueError(f"FLUX resolution must be {FLUX_DEFAULT_RESOLUTION}, got {resolved_resolution}")
+
+    def _pick_float(explicit: Optional[float], key: str, default: float) -> float:
+        value = explicit if explicit is not None else cfg.get(key)
+        if value is None:
+            value = default
+        return float(value)
+
+    resolved_sigma_min = _pick_float(sigma_min, "sigma_min", FLUX_DEFAULT_SIGMA_MIN)
+    resolved_sigma_max = _pick_float(sigma_max, "sigma_max", FLUX_DEFAULT_SIGMA_MAX)
+    resolved_flowmatch_shift = _pick_float(flowmatch_shift, "flowmatch_shift", FLUX_DEFAULT_FLOWMATCH_SHIFT)
+    resolved_flowmatch_mu = _pick_float(
+        flowmatch_mu,
+        "flowmatch_mu",
+        calculate_flux_mu(resolution=resolved_resolution),
+    )
+
+    model_name_or_path = str(
+        cfg.get("model_name_or_path")
+        or cfg.get("model_id")
+        or FLUX_DEFAULT_MODEL_ID
+    )
+    resolved_cfg = dict(cfg)
+    resolved_cfg["model_name_or_path"] = model_name_or_path
+    resolved_cfg.setdefault("model_id", model_name_or_path)
+    resolved_cfg.setdefault("torch_dtype", FLUX_DEFAULT_TORCH_DTYPE)
+    resolved_cfg.setdefault("enable_model_cpu_offload", FLUX_DEFAULT_ENABLE_MODEL_CPU_OFFLOAD)
+    resolved_cfg["resolution"] = resolved_resolution
+    resolved_cfg["latent_resolution"] = flux_latent_resolution(resolved_resolution)
+    resolved_cfg["sigma_min"] = resolved_sigma_min
+    resolved_cfg["sigma_max"] = resolved_sigma_max
+    resolved_cfg["flowmatch_mu"] = resolved_flowmatch_mu
+    resolved_cfg["flowmatch_shift"] = resolved_flowmatch_shift
+
+    return {
+        "resolution": resolved_resolution,
+        "latent_resolution": resolved_cfg["latent_resolution"],
+        "sigma_min": resolved_sigma_min,
+        "sigma_max": resolved_sigma_max,
+        "flowmatch_mu": resolved_flowmatch_mu,
+        "flowmatch_shift": resolved_flowmatch_shift,
+        "backend_options": resolved_cfg,
+    }
 
 
 def prompt_slice(prompts: Sequence[str], start: int, size: int) -> List[str]:

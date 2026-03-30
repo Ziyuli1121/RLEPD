@@ -22,6 +22,7 @@ from training.ppo.pipeline_utils import (
     bootstrap_local_taming,
     default_prompt_csv_path,
     load_prompts_file,
+    resolve_flux_runtime_metadata,
     resolve_predictor_path,
 )
 #----------------------------------------------------------------------------
@@ -184,6 +185,77 @@ def create_model_sd3(
     return backend, "sd3"
 
 
+def create_model_flux(
+    dataset_name=None,
+    guidance_type=None,
+    guidance_rate=None,
+    device=None,
+    backend_config=None,
+):
+    bootstrap_local_diffusers()
+    if dataset_name not in [None, "ms_coco"]:
+        raise ValueError("This trimmed RLEPD build only supports dataset_name='ms_coco'.")
+    if guidance_type not in [None, "cfg"]:
+        raise ValueError("FLUX fine-tuning currently expects guidance_type='cfg'.")
+    if guidance_rate is None:
+        raise ValueError("guidance_rate must be provided for FLUX sampling.")
+
+    cfg = dict(backend_config) if isinstance(backend_config, dict) else {}
+    resolved = resolve_flux_runtime_metadata(
+        backend_options=cfg,
+        resolution=cfg.get("resolution"),
+        sigma_min=cfg.get("sigma_min"),
+        sigma_max=cfg.get("sigma_max"),
+        flowmatch_mu=cfg.get("flowmatch_mu"),
+        flowmatch_shift=cfg.get("flowmatch_shift"),
+    )
+    cfg = dict(resolved["backend_options"])
+    model_id = cfg["model_name_or_path"]
+    torch_dtype = _resolve_torch_dtype(
+        cfg.get("torch_dtype", "bfloat16"),
+        device if isinstance(device, torch.device) else torch.device(device),
+    )
+    enable_offload = bool(cfg.get("enable_model_cpu_offload", False))
+    revision = cfg.get("revision")
+    variant = cfg.get("variant")
+    use_safetensors = cfg.get("use_safetensors", True)
+    token = cfg.get("token")
+    resolution = int(cfg.get("resolution", 1024) or 1024)
+    if resolution != 1024:
+        raise ValueError(f"FLUX resolution must be 1024 in this checkout, got {resolution}")
+    pipeline_kwargs = cfg.get("pipeline_kwargs") if isinstance(cfg.get("pipeline_kwargs"), dict) else None
+    flowmatch_mu = cfg.get("flowmatch_mu")
+
+    from models.backends import FluxDiffusersBackend
+
+    backend = FluxDiffusersBackend(
+        model_name_or_path=model_id,
+        device=device,
+        torch_dtype=torch_dtype,
+        guidance_scale=guidance_rate,
+        enable_model_cpu_offload=enable_offload,
+        revision=revision,
+        variant=variant,
+        use_safetensors=use_safetensors,
+        token=token,
+        pipeline_kwargs=pipeline_kwargs,
+        flowmatch_mu=flowmatch_mu,
+        resolution=resolution,
+    )
+    backend.backend_config = dict(cfg)
+    backend.backend_config["model_name_or_path"] = model_id
+    backend.backend_config["model_id"] = model_id
+    backend.backend_config["torch_dtype"] = str(torch_dtype).replace("torch.", "")
+    backend.backend_config["enable_model_cpu_offload"] = enable_offload
+    backend.backend_config["flowmatch_mu"] = float(backend.resolve_flowmatch_mu())
+    backend.backend_config["flowmatch_shift"] = float(backend.flow_shift)
+    backend.backend_config["sigma_min"] = float(backend.sigma_min)
+    backend.backend_config["sigma_max"] = float(backend.sigma_max)
+    backend.backend_config["resolution"] = resolution
+    backend.backend_config["latent_resolution"] = getattr(backend, "latent_resolution", None)
+    return backend, "flux"
+
+
 def _prepare_sd3_condition(net, prompts, guidance_rate, backend_config):
     prompts_list = list(prompts)
     if guidance_rate == 1.0:
@@ -203,6 +275,21 @@ def _prepare_sd3_condition(net, prompts, guidance_rate, backend_config):
     )
 
 
+def _prepare_flux_condition(net, prompts, guidance_rate, backend_config):
+    prompts_list = list(prompts)
+    base_negative = backend_config.get("negative_prompt", "")
+    if isinstance(base_negative, list):
+        if any(str(item).strip() for item in base_negative):
+            raise ValueError("FLUX v1 integration does not support non-empty negative_prompt lists.")
+    elif base_negative is not None and str(base_negative).strip():
+        raise ValueError("FLUX v1 integration does not support non-empty negative_prompt.")
+    return net.prepare_condition(
+        prompt=prompts_list,
+        negative_prompt=base_negative,
+        guidance_scale=guidance_rate,
+    )
+
+
 def create_model_backend(
     dataset_name=None,
     guidance_type=None,
@@ -215,6 +302,14 @@ def create_model_backend(
     backend = (backend or "ldm").lower()
     if backend == "sd3":
         return create_model_sd3(
+            dataset_name=dataset_name,
+            guidance_type=guidance_type,
+            guidance_rate=guidance_rate,
+            device=device,
+            backend_config=backend_config,
+        )
+    if backend == "flux":
+        return create_model_flux(
             dataset_name=dataset_name,
             guidance_type=guidance_type,
             guidance_rate=guidance_rate,
@@ -325,7 +420,7 @@ def main(
     merged_backend_config = base_backend_config
     merged_backend_config.update(backend_config_override)
     if solver_kwargs.get('model_path'):
-        if resolved_backend == 'sd3':
+        if resolved_backend in {'sd3', 'flux'}:
             merged_backend_config['model_name_or_path'] = solver_kwargs['model_path']
             merged_backend_config['model_id'] = solver_kwargs['model_path']
         else:
@@ -449,6 +544,13 @@ def main(
                 solver_kwargs['guidance_rate'],
                 merged_backend_config,
             )
+        elif solver_kwargs['model_source'] == 'flux':
+            condition_payload = _prepare_flux_condition(
+                net,
+                prompts,
+                solver_kwargs['guidance_rate'],
+                merged_backend_config,
+            )
 
         # Generate images.
         with torch.no_grad():
@@ -463,7 +565,7 @@ def main(
                         output = sampler_fn(net, latents, **call_kwargs)
                         images = output[-1] if call_kwargs.get('return_inters') else output[0]
                         images = net.model.decode_first_stage(images)
-            elif solver_kwargs['model_source'] == 'sd3':
+            elif solver_kwargs['model_source'] in {'sd3', 'flux'}:
                 call_kwargs = dict(solver_kwargs)
                 call_kwargs['condition'] = condition_payload
                 if batch_id == 0:

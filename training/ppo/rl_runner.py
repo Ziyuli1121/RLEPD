@@ -392,7 +392,7 @@ class EPDRolloutRunner:
 
         return policy_output, sample
 
-    def _prepare_conditions(self, prompts: Sequence[str]) -> Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]:
+    def _prepare_conditions(self, prompts: Sequence[str]) -> Tuple[Optional[object], Optional[object], Optional[torch.Tensor]]:
         condition = None
         unconditional = None
         class_labels = None
@@ -413,6 +413,15 @@ class EPDRolloutRunner:
             condition = self.net.prepare_condition(
                 prompt=prompts_list,
                 negative_prompt=negative_prompt,
+                guidance_scale=self.config.guidance_rate,
+            )
+            return condition, None, None
+        if backend_type == "flux":
+            prompts_list = list(prompts)
+            base_negative = self.backend_config.get("negative_prompt", "")
+            condition = self.net.prepare_condition(
+                prompt=prompts_list,
+                negative_prompt=base_negative,
                 guidance_scale=self.config.guidance_rate,
             )
             return condition, None, None
