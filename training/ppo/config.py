@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
+from .pipeline_utils import default_prompt_csv_path, resolve_weight_path
+
 
 class ConfigError(RuntimeError):
     """Raised when configuration values are invalid."""
@@ -367,13 +369,23 @@ def build_config(raw: Dict[str, Any]) -> FullConfig:
 
     reward = RewardConfig(
         type=reward_type,
-        weights_path=weights_path,
+        weights_path=resolve_weight_path("hps", weights_path) or weights_path,
         batch_size=reward_batch_size,
         enable_amp=reward_enable_amp,
         hps_version=hps_version,
         cache_dir=cache_dir,
         multi=multi_cfg,
     )
+    if reward.multi is not None:
+        image_cfg = reward.multi.imagereward
+        if image_cfg.checkpoint is not None:
+            image_cfg.checkpoint = resolve_weight_path("imagereward", image_cfg.checkpoint) or image_cfg.checkpoint
+        aesthetic_cfg = reward.multi.aesthetic
+        aesthetic_cfg.predictor_path = (
+            resolve_weight_path("aesthetic", aesthetic_cfg.predictor_path) or aesthetic_cfg.predictor_path
+        )
+        if aesthetic_cfg.clip_path is not None:
+            aesthetic_cfg.clip_path = resolve_weight_path("clip", aesthetic_cfg.clip_path) or aesthetic_cfg.clip_path
     train_scale_dir = ppo_raw.get("train_scale_dir")
     if train_scale_dir is not None:
         train_scale_dir = bool(train_scale_dir)
@@ -432,8 +444,14 @@ def validate_config(config: FullConfig, check_paths: bool = True) -> None:
             raise ConfigError(f"Predictor snapshot not found: {config.data.predictor_snapshot}")
         if not config.reward.weights_path.is_file():
             raise ConfigError(f"HPS weights not found: {config.reward.weights_path}")
-        if config.data.prompt_csv and not config.data.prompt_csv.is_file():
-            raise ConfigError(f"Prompt CSV not found: {config.data.prompt_csv}")
+        prompt_path = config.data.prompt_csv
+        if prompt_path is None and config.model.dataset_name == "ms_coco":
+            try:
+                prompt_path = default_prompt_csv_path()
+            except FileNotFoundError as exc:
+                raise ConfigError(str(exc)) from exc
+        if prompt_path is not None and not prompt_path.is_file():
+            raise ConfigError(f"Prompt CSV not found: {prompt_path}")
         if config.reward.type == "multi":
             if config.reward.multi is None:
                 raise ConfigError("reward.multi must be set when reward.type=multi.")

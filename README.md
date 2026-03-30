@@ -2,43 +2,68 @@
 
 ## Requirements
 
-This codebase mainly refers to the codebase of [EDM](https://github.com/NVlabs/edm) as the base environment and then add other required packages. 
+This repository uses [EDM](https://github.com/NVlabs/edm) as the base training structure, but the active RLEPD pipeline in this checkout is:
+
+`fake_train -> RDPO train -> export_epd_predictor -> sample -> multi-metric evaluation`
+
+The current code expects:
+
+- Python `3.10`
+- PyTorch `2.x`
+- single-node GPU execution for training / sampling
+- local evaluation weights under `./weights`
+
+The bundled `diffusers/` and `HPSv2/` directories are auto-discovered by the updated code paths. You do not need to set `PYTHONPATH` manually for them.
 
 ```bash
 conda env create -f environment.yml -n edm
 conda activate edm
-pip install omegaconf
-pip install gdown
-conda install lightning -c conda-forge
-pip install git+https://github.com/openai/CLIP.git
-pip install transformers
-pip install taming-transformers
-pip install -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
-pip install kornia fairscale piq
-pip install accelerator
-pip install --upgrade diffusers[torch]
-cd src
-mkdir ms_coco
-cd ms_coco
-wget https://huggingface.co/dnwalkup/StableDiffusion-v1-Releases/resolve/main/v1-5-pruned-emaonly.ckpt
-python download_hpsv2_weights.py --version v2.1 #https://huggingface.co/xswu/HPSv2/blob/main/HPS_v2.1_compressed.pt
-cd ..
-mkdir weights
-cd weights
-# Download evaluators
-wget https://huggingface.co/haor/aesthetics/resolve/main/sac%2Blogos%2Bava1-l14-linearMSE.pth
-gdown 17qrK_aJkVNM75ZEvMEePpLj6L867MLkN
 ```
 
-## Implementation Guide
+Download the runtime assets used by the main pipeline:
 
-Run the commands in [launch.sh](./launch.sh) for RL training, sampling and evaluation.
+```bash
+mkdir -p src/ms_coco
+mkdir -p weights
+
+# Stable Diffusion 1.5 backbone
+wget -O src/ms_coco/v1-5-pruned-emaonly.ckpt \
+  https://huggingface.co/dnwalkup/StableDiffusion-v1-Releases/resolve/main/v1-5-pruned-emaonly.ckpt
+
+# Evaluation weights
+wget -O weights/HPS_v2.1_compressed.pt \
+  https://huggingface.co/xswu/HPSv2/resolve/main/HPS_v2.1_compressed.pt
+wget -O weights/sac+logos+ava1-l14-linearMSE.pth \
+  https://huggingface.co/haor/aesthetics/resolve/main/sac%2Blogos%2Bava1-l14-linearMSE.pth
+# Place the ImageReward checkpoint at weights/ImageReward.pt
+```
+
+Optional:
+
+- If you have a local PickScore checkpoint, place it at `weights/PickScore_v1/`
+- If you use local SD3 model snapshots, point the SD3 configs or `--backend-config/--model-id` arguments at them
+
+## Pipeline Guide
+
+1. Generate a cold-start EPD table with `fake_train.py`
+2. Run RDPO training with `python -m training.ppo.launch`
+3. Export the trained policy mean with `python -m training.ppo.export_epd_predictor`
+4. Sample with `sample.py` or `sample_sd3.py`
+5. Evaluate with the score CLIs or the helper shell scripts
+
+Useful entry scripts:
+
+- [train.sh](./train.sh): cold-start + RL train + export examples
+- [launch.sh](./launch.sh): end-to-end launch examples
+- [sample.sh](./sample.sh), [sample512.sh](./sample512.sh), [sample1024.sh](./sample1024.sh): sampling + scoring examples
+- [test_regression.sh](./test_regression.sh): official regression-style `export -> sample -> score`
+- [test_15.sh](./test_15.sh), [test_512.sh](./test_512.sh), [test_1024.sh](./test_1024.sh): experiment-specific loops
 
 ## Parameter Description
 
 | Category          | Parameter          | Default | Description |
 |-------------------|--------------------|---------|-------------|
-| **General Options** | `dataset_name`     | None    | Supported datasets: `['cifar10', 'ffhq', 'afhqv2', 'imagenet64', 'lsun_bedroom', 'imagenet256', 'lsun_bedroom_ldm', 'ms_coco']` |
+| **General Options** | `dataset_name`     | None    | This trimmed RLEPD checkout officially supports `ms_coco` |
 |                   | `predictor_path`   | None    | Path or experiment number of trained EPD predictor |
 |                   | `batch`            | 64      | Total batch size |
 |                   | `seeds`            | "0-63"  | Random seed range for image generation |
@@ -62,4 +87,4 @@ We provide pre-trained EPD predictors for:
 - SD3-Medium (512*512)
 - SD3-Medium (1024*1024)
 
-The pre-trained EPD predictors are available in `./exp/`.
+The exported and pre-generated predictors in this checkout live under `./exps/`.

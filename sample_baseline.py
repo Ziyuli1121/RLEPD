@@ -16,6 +16,7 @@ from torch_utils.download_util import check_file_by_key
 from training.loss import get_solver_fn
 from contextlib import nullcontext
 from pathlib import Path
+from training.ppo.pipeline_utils import default_prompt_csv_path, load_prompts_file
 
 
 # -----------------------------------------------------------------------------
@@ -64,7 +65,7 @@ def parse_int_list(s):
     return ranges
 
 
-def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, device=None):
+def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, device=None, model_path=None):
     if dataset_name not in [None, "ms_coco"]:
         raise ValueError("Baseline sampling now only supports dataset_name='ms_coco'.")
     if guidance_type not in [None, "cfg"]:
@@ -72,14 +73,16 @@ def create_model(dataset_name=None, guidance_type=None, guidance_rate=None, devi
     if guidance_rate is None:
         raise ValueError("guidance_rate must be provided for cfg sampling.")
 
-    model_path, _ = check_file_by_key("ms_coco")
-    dist.print0(f'Loading the pre-trained diffusion model from "{model_path}"...')
+    resolved_model_path = model_path
+    if resolved_model_path is None:
+        resolved_model_path, _ = check_file_by_key("ms_coco")
+    dist.print0(f'Loading the pre-trained diffusion model from "{resolved_model_path}"...')
 
     from omegaconf import OmegaConf
     from models.networks_edm import CFGPrecond
 
     config = OmegaConf.load("./models/ldm/configs/stable-diffusion/v1-inference.yaml")
-    net = load_ldm_model(config, model_path)
+    net = load_ldm_model(config, resolved_model_path)
     net = CFGPrecond(
         net,
         img_resolution=64,
@@ -243,9 +246,8 @@ def main(
         guidance_type=guidance_type,
         guidance_rate=guidance_rate,
         device=device,
+        model_path=model_path,
     )
-    if model_path:
-        raise NotImplementedError("--model-path override is not yet supported without predictor.")
 
     sigma_min = sigma_min if sigma_min is not None else getattr(net, "sigma_min", 0.002)
     sigma_max = sigma_max if sigma_max is not None else getattr(net, "sigma_max", 80.0)
@@ -288,27 +290,13 @@ def main(
     # Load prompts
     prompts_list = None
     if prompt_file and prompt is None:
-        path = Path(prompt_file)
-        if path.suffix.lower() == ".csv":
-            with path.open("r", encoding="utf-8") as handle:
-                reader = csv.DictReader(handle)
-                prompts_list = [row.get("text", "").strip() for row in reader if row.get("text")]
-        else:
-            with path.open("r", encoding="utf-8") as handle:
-                prompts_list = [line.strip() for line in handle if line.strip()]
-        if not prompts_list:
-            raise RuntimeError(f"No prompts found in '{prompt_file}'.")
+        prompts_list = load_prompts_file(prompt_file)
     elif dataset_name in ["ms_coco"] and prompt is None:
-        prompt_path, _ = check_file_by_key("prompts")
-        prompts_list = []
-        with open(prompt_path, "r", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            for row in reader:
-                text = row.get("text", "").strip()
-                if text:
-                    prompts_list.append(text)
-        if not prompts_list:
-            raise RuntimeError(f"No prompts found in '{prompt_path}'.")
+        try:
+            prompt_path = default_prompt_csv_path()
+        except FileNotFoundError:
+            prompt_path, _ = check_file_by_key("prompts")
+        prompts_list = load_prompts_file(prompt_path)
 
     # Determine output directory
     nfe = num_steps
@@ -391,7 +379,7 @@ def main(
             os.makedirs(outdir, exist_ok=True)
             nrows = int(images.shape[0] ** 0.5)
             image_grid = make_grid(images, nrows, padding=0)
-            save_image(image_grid, os.path.join(outdir, "grid.png"))
+            save_image(image_grid, os.path.join(outdir, f"grid_batch{batch_id:04d}.png"))
         else:
             images_np = (
                 (images * 127.5 + 128)

@@ -18,12 +18,16 @@ import torch.distributed as dist
 from PIL import Image
 from torchvision.transforms.functional import pil_to_tensor, to_pil_image
 
+from .pipeline_utils import bootstrap_local_hps, resolve_weight_path
+
+bootstrap_local_hps()
+
 try:
     from hpsv2.src.open_clip import create_model_and_transforms, get_tokenizer
     from hpsv2.utils import root_path as HPS_ROOT_DEFAULT, hps_version_map
 except ImportError as exc:  # pragma: no cover
     raise ImportError(
-        "Failed to import HPSv2 package. Ensure the local HPSv2 repo is on PYTHONPATH."
+        "Failed to import HPSv2 package. Ensure the bundled HPSv2 repo is present or install hpsv2."
     ) from exc
 
 from huggingface_hub import hf_hub_download
@@ -168,6 +172,9 @@ class RewardHPS:
             if self.config.weights_path is not None
             else None
         )
+        resolved_local = resolve_weight_path("hps", weights_path)
+        if resolved_local is not None:
+            weights_path = resolved_local
 
         if weights_path is None:
             cache_root = (

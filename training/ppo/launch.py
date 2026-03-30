@@ -20,8 +20,6 @@ from . import config as cfg
 from .cold_start import build_dirichlet_params, load_predictor_table
 from .policy import EPDParamPolicy
 from .ppo_trainer import PPOTrainer, PPOTrainerConfig
-from .reward_hps import RewardHPS, RewardHPSConfig
-from .reward_multi import RewardMetricWeights, RewardMultiMetric, RewardMultiMetricConfig, RewardMultiMetricPaths
 from .rl_runner import EPDRolloutRunner, RLRunnerConfig
 
 
@@ -216,8 +214,11 @@ def main(argv: Optional[List[str]] = None) -> None:
             raw.setdefault("ppo", {})["steps"] = args.max_steps
         full_config = cfg.build_config(raw)
         meta = enrich_model_dimensions(full_config, dry_run=args.dry_run)
-        cfg.validate_config(full_config, check_paths=not args.dry_run)
+        cfg.validate_config(full_config, check_paths=True)
     except cfg.ConfigError as err:
+        print(f"[ConfigError] {err}", file=sys.stderr)
+        sys.exit(1)
+    except FileNotFoundError as err:
         print(f"[ConfigError] {err}", file=sys.stderr)
         sys.exit(1)
 
@@ -323,6 +324,14 @@ def main(argv: Optional[List[str]] = None) -> None:
             print("[Launch] Stable Diffusion model loaded.")
         net = net.to(device)
         net.eval()
+
+        from .reward_hps import RewardHPS, RewardHPSConfig
+        from .reward_multi import (
+            RewardMetricWeights,
+            RewardMultiMetric,
+            RewardMultiMetricConfig,
+            RewardMultiMetricPaths,
+        )
 
         hps_cfg = RewardHPSConfig(
             device=device,

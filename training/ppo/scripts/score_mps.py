@@ -26,28 +26,9 @@ import torch
 from PIL import Image
 from transformers import AutoTokenizer, CLIPImageProcessor
 
+from training.ppo.pipeline_utils import collect_image_files, load_prompts_file, resolve_weight_path, summarize_scores
+
 warnings.filterwarnings("ignore", category=FutureWarning, module=r"timm.*")
-
-
-def _load_prompts(path: Path) -> List[str]:
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        with path.open("r", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            prompts = [row.get("text", "").strip() for row in reader if row.get("text")]
-    else:
-        with path.open("r", encoding="utf-8") as handle:
-            prompts = [line.strip() for line in handle if line.strip()]
-    if not prompts:
-        raise RuntimeError(f"未能从 {path} 读取到任何 prompt。")
-    return prompts
-
-
-def _collect_images(directory: Path, pattern: str) -> List[Path]:
-    files = sorted(directory.glob(pattern))
-    if not files:
-        raise RuntimeError(f"在 {directory} 下未找到匹配 {pattern} 的图像文件。")
-    return files
 
 
 def _default_mps_root() -> Path:
@@ -204,17 +185,6 @@ class _MPSScorer:
         return score[0].item()
 
 
-def _summarize(scores: torch.Tensor) -> dict:
-    stats = {
-        "count": int(scores.shape[0]),
-        "mean": float(scores.mean().item()),
-        "std": float(scores.std(unbiased=False).item()) if scores.numel() > 1 else 0.0,
-        "min": float(scores.min().item()),
-        "max": float(scores.max().item()),
-    }
-    return stats
-
-
 def _evaluate(
     scorer: _MPSScorer,
     image_files: Sequence[Path],
@@ -318,12 +288,12 @@ def main(argv: Iterable[str] | None = None) -> None:
 
     images_dir = args.images.resolve()
     prompts_path = args.prompts.resolve()
-    weights_path = args.weights.expanduser()
+    weights_path = resolve_weight_path("mps", args.weights) or args.weights.expanduser()
     if not weights_path.exists():
         raise RuntimeError(f"未找到 MPS 权重文件：{weights_path}")
 
-    image_files = _collect_images(images_dir, args.pattern)
-    prompts = _load_prompts(prompts_path)
+    image_files = collect_image_files(images_dir, args.pattern)
+    prompts = load_prompts_file(prompts_path)
 
     device = torch.device(args.device)
     scorer = _MPSScorer(
@@ -337,7 +307,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     )
 
     scores, metadata = _evaluate(scorer, image_files, prompts, args.batch_size)
-    stats = _summarize(scores)
+    stats = summarize_scores(scores)
 
     result = {
         "images_dir": str(images_dir),

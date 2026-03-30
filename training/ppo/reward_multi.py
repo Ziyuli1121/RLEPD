@@ -19,6 +19,7 @@ from .reward_models.aesthetic_predictor_v2 import AestheticV2Model
 from .reward_models.imagereward import ImageReward
 from .reward_models.imagereward.utils import load as load_imagereward
 from .reward_models.pickscore import PickScoreModel
+from .pipeline_utils import resolve_weight_path
 
 
 @dataclass
@@ -228,18 +229,19 @@ class RewardMultiMetric:
 
     def _ensure_pickscore(self) -> PickScoreModel:
         if self._pickscore is None:
+            local_pickscore = resolve_weight_path("pickscore", self.config.pickscore_model_name_or_path)
+            model_ref = str(local_pickscore) if local_pickscore is not None else self.config.pickscore_model_name_or_path
             self._pickscore = PickScoreModel(
                 device=str(self._device),
                 processor_name_or_path=self.config.pickscore_processor_name_or_path,
-                model_pretrained_name_or_path=self.config.pickscore_model_name_or_path,
+                model_pretrained_name_or_path=model_ref,
             )
         return self._pickscore
 
     def _ensure_imagereward(self) -> ImageReward:
         if self._imagereward is None:
-            checkpoint = (
-                str(self.config.paths.imagereward_checkpoint) if self.config.paths.imagereward_checkpoint else "ImageReward-v1.0"
-            )
+            resolved_checkpoint = resolve_weight_path("imagereward", self.config.paths.imagereward_checkpoint)
+            checkpoint = str(resolved_checkpoint) if resolved_checkpoint is not None else "ImageReward-v1.0"
             cache_dir = (
                 str(self.config.paths.imagereward_cache_dir)
                 if self.config.paths.imagereward_cache_dir
@@ -258,9 +260,8 @@ class RewardMultiMetric:
 
     def _ensure_clip(self):
         if self._clip_model is None or self._clip_preprocess is None:
-            download_root = (
-                str(self.config.paths.clip_cache_dir) if self.config.paths.clip_cache_dir else None
-            )
+            resolved_clip_root = resolve_weight_path("clip", self.config.paths.clip_cache_dir)
+            download_root = str(resolved_clip_root) if resolved_clip_root is not None else None
             self._clip_model, self._clip_preprocess = clip.load(
                 "ViT-L/14",
                 device=self._device,
@@ -274,11 +275,11 @@ class RewardMultiMetric:
 
     def _ensure_aesthetic(self) -> AestheticV2Model:
         if self._aesthetic is None:
-            predictor_path = self.config.paths.aesthetic_predictor_path
+            predictor_path = resolve_weight_path("aesthetic", self.config.paths.aesthetic_predictor_path)
             if predictor_path is None:
                 raise RuntimeError("Aesthetic predictor path must be provided when its weight is non-zero.")
             self._aesthetic = AestheticV2Model(
-                clip_path=self.config.paths.aesthetic_clip_path,
+                clip_path=resolve_weight_path("clip", self.config.paths.aesthetic_clip_path),
                 predictor_path=str(predictor_path),
                 device=self._device,
             )

@@ -548,7 +548,7 @@ if __name__ == "__main__":  # pragma: no cover
 
 '''
 
-python -m training.ppo.export_epd_predictor exps/20251030-215325-sd15_rl_base \
+python -m training.ppo.export_epd_predictor exps/20251222-171726-sd15_k20 \
     --checkpoint checkpoints/policy-step000040.pt
 
 

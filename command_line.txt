@@ -1,0 +1,146 @@
+(/work/hdd/becj/zli42/zli42_envs/epd) [zli42@gpue02 RLEPD]$ ./TEST.sh
+[TEST] python=3.9.25 torch=2.8.0+cu128 device=NVIDIA H200
+
+[TEST] Using SD3 model reference: /u/zli42/.cache/huggingface/hub/models--stabilityai--stable-diffusion-3-medium-diffusers/snapshots/ea42f8cef0f178587cf766dc8129abd379c90671
+
+[TEST] Stage 1: fake_train for sd1.5
+[fake_train] Wrote snapshot to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f15/network-snapshot-000005.pkl
+[fake_train] Wrote training options to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f15/training_options.json
+[fake_train] Wrote log to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f15/log.txt
+
+[TEST] Stage 1: fake_train for sd3-512
+[fake_train] Wrote snapshot to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f512/network-snapshot-000005.pkl
+[fake_train] Wrote training options to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f512/training_options.json
+[fake_train] Wrote log to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f512/log.txt
+
+[TEST] Stage 1: fake_train for sd3-1024
+[fake_train] Wrote snapshot to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f1024/network-snapshot-000005.pkl
+[fake_train] Wrote training options to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f1024/training_options.json
+[fake_train] Wrote log to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/fake/f1024/log.txt
+
+[TEST] Stage 2: PPO smoke train for smoke_sd15
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W329 16:23:10.772922206 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[Launch] run_dir=/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15
+[Launch] World size: 1
+[Launch][Rank 0] Using device: cuda:0
+[Launch] Loading predictor snapshot...
+[Launch] Loading Stable Diffusion model...
+Model already exists: ../RLEPD/src/ms_coco/v1-5-pruned-emaonly.ckpt
+Loading the pre-trained diffusion model from "../RLEPD/src/ms_coco/v1-5-pruned-emaonly.ckpt"...
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+Global Step: 840000
+LatentDiffusion: Running in eps-prediction mode
+DiffusionWrapper has 859.52 M params.
+making attention of type 'vanilla' with 512 in_channels
+Working with z of shape (1, 4, 32, 32) = 4096 dimensions.
+making attention of type 'vanilla' with 512 in_channels
+[Launch] Stable Diffusion model loaded.
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/hub.py:4: FutureWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/registry.py:4: FutureWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+[Launch] Writing metrics to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15/logs/metrics.jsonl
+[Step 1] mixed_reward_mean=0.1413, kl=0.0276, policy_loss=0.1368, mixed_reward_std=0.0341
+[Step 2] mixed_reward_mean=0.1548, kl=0.1244, policy_loss=-0.0067, mixed_reward_std=0.0323
+[Step 3] mixed_reward_mean=0.1600, kl=0.2381, policy_loss=-0.0159, mixed_reward_std=0.0334
+[Step 4] mixed_reward_mean=0.1523, kl=0.2841, policy_loss=0.0105, mixed_reward_std=0.0332
+[Step 5] mixed_reward_mean=0.1686, kl=0.3398, policy_loss=0.0515, mixed_reward_std=0.0536
+[Step 6] mixed_reward_mean=0.1440, kl=0.4126, policy_loss=-0.0075, mixed_reward_std=0.0417
+[Step 7] mixed_reward_mean=0.1675, kl=0.4402, policy_loss=-0.0194, mixed_reward_std=0.0349
+[Step 8] mixed_reward_mean=0.1485, kl=0.4714, policy_loss=0.0175, mixed_reward_std=0.0166
+[Step 9] mixed_reward_mean=0.1528, kl=0.5289, policy_loss=-0.0051, mixed_reward_std=0.0441
+[Step 10] mixed_reward_mean=0.1702, kl=0.6155, policy_loss=-0.0360, mixed_reward_std=0.0296
+[Step 10] Saved policy checkpoint to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15/checkpoints/policy-step000010.pt
+[Launch] Finished 10 PPO steps. Results saved to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15
+
+[TEST] Stage 2: PPO smoke train for smoke_sd3_512
+[Config] Overriding model.backend_options with predictor metadata
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W329 16:31:29.750973365 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[Launch] run_dir=/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-163125-smoke_sd3_512
+[Launch] World size: 1
+[Launch][Rank 0] Using device: cuda:0
+[Launch] Loading predictor snapshot...
+[Launch] Loading Stable Diffusion model...
+
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[SD3Backend] Loading pipeline model='/u/zli42/.cache/huggingface/hub/models--stabilityai--stable-diffusion-3-medium-diffusers/snapshots/ea42f8cef0f178587cf766dc8129abd379c90671' device=cuda:0 dtype=torch.float16 offload=False
+Loading pipeline components...:  11%|█████████▌                                                                            | 1/9 [00:29<03:53, 29.15s/it]`torch_dtype` is deprecated! Use `dtype` instead!
+Loading checkpoint shards: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:02<00:00,  1.38s/it]
+Loading pipeline components...:  67%|█████████████████████████████████████████████████████████▎                            | 6/9 [00:37<00:09,  3.12s/it]You set `add_prefix_space`. The tokenizer needs to be converted from the slow tokenizers
+Loading pipeline components...: 100%|██████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:40<00:00,  4.53s/it]
+[SD3Backend] Pipeline weights loaded.
+[SD3Backend] Moved pipeline to device cuda:0.
+[Launch] Stable Diffusion model loaded.
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/hub.py:4: FutureWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/registry.py:4: FutureWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+[Launch] Writing metrics to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-163125-smoke_sd3_512/logs/metrics.jsonl
+[Step 1] mixed_reward_mean=0.2090, kl=0.0013, policy_loss=0.0046, mixed_reward_std=0.0349
+[Step 2] mixed_reward_mean=0.2188, kl=0.0066, policy_loss=-0.0048, mixed_reward_std=0.0411
+[Step 3] mixed_reward_mean=0.2036, kl=0.0133, policy_loss=0.0059, mixed_reward_std=0.0532
+[Step 4] mixed_reward_mean=0.2085, kl=0.0180, policy_loss=-0.0023, mixed_reward_std=0.0424
+[Step 5] mixed_reward_mean=0.2174, kl=0.0214, policy_loss=0.0024, mixed_reward_std=0.0280
+[Step 6] mixed_reward_mean=0.2313, kl=0.0249, policy_loss=-0.0074, mixed_reward_std=0.0320
+[Step 7] mixed_reward_mean=0.2017, kl=0.0267, policy_loss=0.0133, mixed_reward_std=0.0338
+[Step 8] mixed_reward_mean=0.2467, kl=0.0263, policy_loss=0.0010, mixed_reward_std=0.0243
+[Step 9] mixed_reward_mean=0.2051, kl=0.0260, policy_loss=0.0041, mixed_reward_std=0.0259
+[Step 10] mixed_reward_mean=0.2461, kl=0.0263, policy_loss=0.0042, mixed_reward_std=0.0256
+[Step 10] Saved policy checkpoint to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-163125-smoke_sd3_512/checkpoints/policy-step000010.pt
+[Launch] Finished 10 PPO steps. Results saved to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-163125-smoke_sd3_512
+
+[TEST] Stage 2: PPO smoke train for smoke_sd3_1024
+[Config] Overriding model.backend_options with predictor metadata
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/torch/distributed/distributed_c10d.py:4807: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+[rank0]:[W329 16:56:18.034769468 ProcessGroupNCCL.cpp:5023] [PG ID 0 PG GUID 0 Rank 0]  using GPU 0 as device used by this process is currently unknown. This can potentially cause a hang if this rank to GPU mapping is incorrect. You can specify device_id in init_process_group() to force use of a particular device.
+[Launch] run_dir=/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-165606-smoke_sd3_1024
+[Launch] World size: 1
+[Launch][Rank 0] Using device: cuda:0
+[Launch] Loading predictor snapshot...
+[Launch] Loading Stable Diffusion model...
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/transformers/utils/hub.py:110: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+[SD3Backend] Loading pipeline model='/u/zli42/.cache/huggingface/hub/models--stabilityai--stable-diffusion-3-medium-diffusers/snapshots/ea42f8cef0f178587cf766dc8129abd379c90671' device=cuda:0 dtype=torch.float16 offload=False
+Loading pipeline components...:   0%|                                                                                              | 0/9 [00:00<?, ?it/s]`torch_dtype` is deprecated! Use `dtype` instead!
+Loading pipeline components...:  33%|████████████████████████████▋                                                         | 3/9 [00:26<01:09, 11.57s/it]You set `add_prefix_space`. The tokenizer needs to be converted from the slow tokenizers
+Loading checkpoint shards: 100%|███████████████████████████████████████████████████████████████████████████████████████████| 2/2 [00:00<00:00,  3.66it/s]
+Loading pipeline components...: 100%|██████████████████████████████████████████████████████████████████████████████████████| 9/9 [00:36<00:00,  4.11s/it]
+[SD3Backend] Pipeline weights loaded.
+[SD3Backend] Moved pipeline to device cuda:0.
+[Launch] Stable Diffusion model loaded.
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/layers/__init__.py:48: FutureWarning: Importing from timm.models.layers is deprecated, please import via timm.layers
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.layers", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/hub.py:4: FutureWarning: Importing from timm.models.hub is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/registry.py:4: FutureWarning: Importing from timm.models.registry is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+/work/hdd/becj/zli42/zli42_envs/epd/lib/python3.9/site-packages/timm/models/helpers.py:7: FutureWarning: Importing from timm.models.helpers is deprecated, please import via timm.models
+  warnings.warn(f"Importing from {__name__} is deprecated, please import via timm.models", FutureWarning)
+[Launch] Writing metrics to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-165606-smoke_sd3_1024/logs/metrics.jsonl
+[Step 1] mixed_reward_mean=0.1581, kl=0.0004, policy_loss=0.0019, mixed_reward_std=0.0385
+[Step 2] mixed_reward_mean=0.1677, kl=0.0026, policy_loss=-0.0121, mixed_reward_std=0.0399
+[Step 3] mixed_reward_mean=0.1547, kl=0.0070, policy_loss=-0.0029, mixed_reward_std=0.0555
+[Step 4] mixed_reward_mean=0.2095, kl=0.0112, policy_loss=-0.0039, mixed_reward_std=0.0395
+[Step 5] mixed_reward_mean=0.1841, kl=0.0161, policy_loss=0.0039, mixed_reward_std=0.0384
+[Step 6] mixed_reward_mean=0.1644, kl=0.0223, policy_loss=-0.0041, mixed_reward_std=0.0414
+[Step 7] mixed_reward_mean=0.2105, kl=0.0306, policy_loss=-0.0006, mixed_reward_std=0.0288
+[Step 8] mixed_reward_mean=0.1559, kl=0.0389, policy_loss=-0.0033, mixed_reward_std=0.0398
+[Step 9] mixed_reward_mean=0.1749, kl=0.0438, policy_loss=-0.0053, mixed_reward_std=0.0361
+[Step 10] mixed_reward_mean=0.1981, kl=0.0487, policy_loss=-0.0023, mixed_reward_std=0.0454
+[Step 10] Saved policy checkpoint to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-165606-smoke_sd3_1024/checkpoints/policy-step000010.pt
+[Launch] Finished 10 PPO steps. Results saved to /work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-165606-smoke_sd3_1024

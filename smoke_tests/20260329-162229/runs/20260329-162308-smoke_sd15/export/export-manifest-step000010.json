@@ -1,0 +1,18 @@
+{
+  "run_dir": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15",
+  "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/runs/20260329-162308-smoke_sd15/checkpoints/policy-step000010.pt",
+  "export_step": 10,
+  "timestamp": "2026-03-29T22:25:25.861211+00:00",
+  "sanitized_rows": {
+    "reordered": 0,
+    "adjusted": 0
+  },
+  "latest_metrics": {
+    "step": 10,
+    "mixed_reward_mean": 0.17022705078125,
+    "mixed_reward_std": 0.02958870865404606,
+    "kl": 0.6154782772064209,
+    "policy_loss": -0.03599100187420845,
+    "elapsed_sec": 89.15312504768372
+  }
+}

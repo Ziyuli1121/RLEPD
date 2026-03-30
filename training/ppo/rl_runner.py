@@ -26,6 +26,8 @@ import torch.nn as nn
 from solvers import epd_sampler
 from torch_utils.download_util import check_file_by_key
 
+from .pipeline_utils import default_prompt_csv_path, load_prompts_file
+
 from .policy import EPDParamPolicy, PolicyOutput, PolicySample
 
 
@@ -130,19 +132,12 @@ def _load_prompts(prompt_csv: Optional[Path]) -> List[str]:
     if prompt_csv is not None:
         path = Path(prompt_csv)
     else:
-        prompt_path, _ = check_file_by_key("prompts")
-        path = Path(prompt_path)
-
-    prompts: List[str] = []
-    with path.open("r", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            text = row.get("text", "").strip()
-            if text:
-                prompts.append(text)
-    if not prompts:
-        raise RuntimeError(f"No prompts were loaded from {path}.")
-    return prompts
+        try:
+            path = default_prompt_csv_path()
+        except FileNotFoundError:
+            prompt_path, _ = check_file_by_key("prompts")
+            path = Path(prompt_path)
+    return load_prompts_file(path)
 
 
 def _repeat_prompts(prompts: Sequence[str], rloo_k: int) -> List[str]:

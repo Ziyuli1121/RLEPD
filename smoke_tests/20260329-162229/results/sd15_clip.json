@@ -1,0 +1,19 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/samples/sd15",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/prompts/smoke_prompts_5.txt",
+  "stats": {
+    "count": 5,
+    "mean": 0.249755859375,
+    "std": 0.06337106972932816,
+    "min": 0.1651611328125,
+    "max": 0.312744140625
+  },
+  "metadata": {
+    "duration": 16.333645820617676,
+    "num_images": 5,
+    "batch_size": 1,
+    "device": "cuda",
+    "cache_root": "/work/nvme/betk/zli42/RLEPD/weights/clip"
+  }
+}

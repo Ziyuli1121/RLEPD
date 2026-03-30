@@ -28,6 +28,7 @@ from sample import create_model_backend
 import solvers
 from solvers import epd_parallel_sampler
 from training.networks import EPD_predictor
+from training.ppo.pipeline_utils import load_prompts_file, resolve_predictor_path
 
 
 # -----------------------------------------------------------------------------
@@ -66,19 +67,7 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
     if prompt is not None:
         return [prompt] * count
     if prompt_file:
-        path = Path(prompt_file)
-        lines: List[str] = []
-        if path.suffix.lower() == ".csv":
-            with path.open("r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if "text" in row and row["text"].strip():
-                        lines.append(row["text"].strip())
-        else:
-            with path.open("r", encoding="utf-8") as f:
-                lines = [line.strip() for line in f if line.strip()]
-        if not lines:
-            raise RuntimeError(f"No prompts found in '{prompt_file}'.")
+        lines = load_prompts_file(prompt_file)
         reps = (count + len(lines) - 1) // len(lines)
         lines = (lines * reps)[:count]
         return lines
@@ -163,7 +152,7 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    predictor_path = args.predictor
+    predictor_path = resolve_predictor_path(args.predictor)
     predictor_module = _load_predictor(predictor_path, device=device)
 
     backend_cfg = {}
@@ -271,8 +260,11 @@ def main() -> None:
     print(f"  - guidance_rate: {guidance_rate}")
     print(f"  - device: {device}")
 
+    batch_start = 0
     for batch_idx, batch_seeds in enumerate(all_batches):
-        batch_prompts = prompts[batch_idx * batch_seeds.numel() : batch_idx * batch_seeds.numel() + batch_seeds.numel()]
+        batch_size = int(batch_seeds.numel())
+        batch_prompts = prompts[batch_start : batch_start + batch_size]
+        batch_start += batch_size
         rnd = StackedRandomGenerator(device, batch_seeds)
         latents = rnd.randn(
             [len(batch_seeds), net.img_channels, net.img_resolution, net.img_resolution],

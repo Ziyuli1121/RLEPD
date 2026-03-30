@@ -1,0 +1,30 @@
+{
+  "num_steps": 4,
+  "num_points": 2,
+  "sampler_stu": "epd",
+  "sampler_tea": "dpm",
+  "guidance_type": "cfg",
+  "guidance_rate": 7.5,
+  "schedule_type": "discrete",
+  "schedule_rho": 1.0,
+  "dataset_name": "ms_coco",
+  "img_resolution": 1024,
+  "scale_dir": 0.05,
+  "scale_time": 0.05,
+  "fcn": false,
+  "afs": false,
+  "alpha": 10.0,
+  "backend": "ldm",
+  "backend_config": {
+    "resolution": 1024
+  },
+  "sigma_min": null,
+  "sigma_max": null,
+  "flowmatch_mu": null,
+  "flowmatch_shift": null,
+  "r_mean": 0.5,
+  "weight_mean": 0.5,
+  "r_params_norm": 1.251262125765613,
+  "weight_logits_norm": 0.0,
+  "seed": 0
+}

@@ -10,6 +10,7 @@ from __future__ import annotations
 import csv
 import os
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import List, Sequence
 
@@ -19,6 +20,7 @@ from torchvision.utils import make_grid, save_image
 
 from sample import create_model_sd3
 from training.loss import get_solver_fn
+from training.ppo.pipeline_utils import load_prompts_file
 
 
 # -----------------------------------------------------------------------------
@@ -79,20 +81,7 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
     if prompt is not None:
         return [prompt] * count
     if prompt_file:
-        path = Path(prompt_file)
-        lines: List[str] = []
-        if path.suffix.lower() == ".csv":
-            with path.open("r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if "text" in row and row["text"].strip():
-                        lines.append(row["text"].strip())
-        else:
-            with path.open("r", encoding="utf-8") as f:
-                lines = [line.strip() for line in f if line.strip()]
-        if not lines:
-            raise RuntimeError(f"No prompts found in '{prompt_file}'.")
-        # 如果提供的行少于请求数量，则循环使用
+        lines = load_prompts_file(prompt_file)
         reps = (count + len(lines) - 1) // len(lines)
         lines = (lines * reps)[:count]
         return lines
@@ -204,10 +193,11 @@ def main(
 
     os.makedirs(outdir, exist_ok=True)
 
+    batch_start = 0
     for batch_idx, batch_seeds in enumerate(all_batches):
-        batch_prompts = prompts[
-            batch_idx * batch_seeds.numel() : batch_idx * batch_seeds.numel() + batch_seeds.numel()
-        ]
+        batch_size = int(batch_seeds.numel())
+        batch_prompts = prompts[batch_start : batch_start + batch_size]
+        batch_start += batch_size
         if sampler_mode == "flowmatch" and skip_final_flowmatch_step:
             rnd = StackedRandomGenerator(device, batch_seeds)
             latents = rnd.randn(
@@ -228,10 +218,11 @@ def main(
                 images = torch.clamp(images / 2 + 0.5, 0, 1)
         elif sampler_mode == "flowmatch":
             gen = [torch.Generator(device).manual_seed(int(s.item()) % (1 << 32)) for s in batch_seeds]
-            with torch.no_grad(), torch.cuda.amp.autocast():  # autocast no-op on CPU
+            autocast_ctx = torch.amp.autocast("cuda") if device.type == "cuda" else nullcontext()
+            with torch.no_grad(), autocast_ctx:
                 result = pipe(
                     prompt=batch_prompts,
-                    negative_prompt=[""] * len(batch_prompts),
+                    negative_prompt=[""] * len(batch_prompts) if guidance_rate > 1.0 else None,
                     num_inference_steps=num_steps,
                     guidance_scale=guidance_rate,
                     generator=gen,

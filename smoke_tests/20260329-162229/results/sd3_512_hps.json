@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/samples/sd3_512",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/smoke_tests/20260329-162229/prompts/smoke_prompts_2.txt",
+  "stats": {
+    "count": 2,
+    "mean": 0.234130859375,
+    "std": 0.03533935546875,
+    "min": 0.1988525390625,
+    "max": 0.26953125
+  },
+  "metadata": {
+    "duration": 0.4750523567199707,
+    "num_images": 2,
+    "batch_size": 1,
+    "device": "cuda"
+  }
+}

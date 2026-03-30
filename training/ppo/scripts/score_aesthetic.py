@@ -23,41 +23,10 @@ from typing import Callable, Iterable, List, Sequence
 import torch
 from PIL import Image
 
+from training.ppo.pipeline_utils import collect_image_files, load_prompts_file, resolve_weight_path, summarize_scores
 from training.ppo.reward_models.aesthetic_predictor_v2 import AestheticV2Model, torch_normalized
 
 warnings.filterwarnings("ignore", category=FutureWarning, module=r"timm.*")
-
-
-def _load_prompts(path: Path) -> List[str]:
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        with path.open("r", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            prompts = [row.get("text", "").strip() for row in reader if row.get("text")]
-    else:
-        with path.open("r", encoding="utf-8") as handle:
-            prompts = [line.strip() for line in handle if line.strip()]
-    if not prompts:
-        raise RuntimeError(f"未能从 {path} 读取到任何 prompt。")
-    return prompts
-
-
-def _collect_images(directory: Path, pattern: str) -> List[Path]:
-    files = sorted(directory.glob(pattern))
-    if not files:
-        raise RuntimeError(f"在 {directory} 下未找到匹配 {pattern} 的图像文件。")
-    return files
-
-
-def _summarize(scores: torch.Tensor) -> dict:
-    stats = {
-        "count": int(scores.shape[0]),
-        "mean": float(scores.mean().item()),
-        "std": float(scores.std(unbiased=False).item()) if scores.numel() > 1 else 0.0,
-        "min": float(scores.min().item()),
-        "max": float(scores.max().item()),
-    }
-    return stats
 
 
 @dataclass
@@ -93,11 +62,15 @@ def _build_reward(args: argparse.Namespace) -> tuple[AestheticReward, str]:
         cache_dir.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("CLIP_HOME", str(cache_dir))
 
-    weights_path = args.weights.expanduser()
+    weights_path = resolve_weight_path("aesthetic", args.weights) or args.weights.expanduser()
     if not weights_path.exists():
         raise RuntimeError(f"Aesthetic 权重文件不存在：{weights_path}")
 
     clip_override = os.environ.get("AESTHETIC_CLIP_PATH")
+    if not clip_override:
+        local_clip = resolve_weight_path("clip", args.cache_dir)
+        if local_clip is not None:
+            clip_override = str(local_clip)
     base = AestheticV2Model(
         clip_path=clip_override if clip_override else None,
         predictor_path=str(weights_path),
@@ -201,12 +174,12 @@ def main(argv: Iterable[str] | None = None) -> None:
     images_dir = args.images.resolve()
     prompts_path = args.prompts.resolve()
 
-    image_files = _collect_images(images_dir, args.pattern)
-    prompts = _load_prompts(prompts_path)
+    image_files = collect_image_files(images_dir, args.pattern)
+    prompts = load_prompts_file(prompts_path)
 
     reward, weights_ref = _build_reward(args)
     scores, meta = _score(reward, image_files, prompts, args.batch_size)
-    stats = _summarize(scores)
+    stats = summarize_scores(scores)
 
     meta["weights"] = weights_ref
 

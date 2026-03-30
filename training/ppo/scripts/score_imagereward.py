@@ -5,7 +5,7 @@ Usage example:
     python -m training.ppo.scripts.score_imagereward \\
         --images exps/<run-id>/samples \\
         --prompts prompts.csv \\
-        --weights weights/ImageReward-v1.0.pt
+        --weights weights/ImageReward.pt
 """
 
 from __future__ import annotations
@@ -21,41 +21,16 @@ from typing import Iterable, List, Sequence
 
 import torch
 
+from training.ppo.pipeline_utils import (
+    WEIGHTS_ROOT,
+    collect_image_files,
+    load_prompts_file,
+    resolve_weight_path,
+    summarize_scores,
+)
 from training.ppo.reward_models.imagereward.utils import load as load_imagereward
 
 warnings.filterwarnings("ignore", category=FutureWarning, module=r"timm.*")
-
-
-def _load_prompts(path: Path) -> List[str]:
-    suffix = path.suffix.lower()
-    if suffix == ".csv":
-        with path.open("r", encoding="utf-8") as handle:
-            reader = csv.DictReader(handle)
-            prompts = [row.get("text", "").strip() for row in reader if row.get("text")]
-    else:
-        with path.open("r", encoding="utf-8") as handle:
-            prompts = [line.strip() for line in handle if line.strip()]
-    if not prompts:
-        raise RuntimeError(f"未能从 {path} 读取到任何 prompt。")
-    return prompts
-
-
-def _collect_images(directory: Path, pattern: str) -> List[Path]:
-    files = sorted(directory.glob(pattern))
-    if not files:
-        raise RuntimeError(f"在 {directory} 下未找到匹配 {pattern} 的图像文件。")
-    return files
-
-
-def _summarize(scores: torch.Tensor) -> dict:
-    stats = {
-        "count": int(scores.shape[0]),
-        "mean": float(scores.mean().item()),
-        "std": float(scores.std(unbiased=False).item()) if scores.numel() > 1 else 0.0,
-        "min": float(scores.min().item()),
-        "max": float(scores.max().item()),
-    }
-    return stats
 
 
 def _build_reward(args: argparse.Namespace):
@@ -64,12 +39,16 @@ def _build_reward(args: argparse.Namespace):
         cache_dir.mkdir(parents=True, exist_ok=True)
     download_root = str(cache_dir) if cache_dir is not None else None
 
-    weights_path = args.weights.expanduser()
+    weights_path = resolve_weight_path("imagereward", args.weights) or args.weights.expanduser()
     weight_ref = str(weights_path)
     if not weights_path.exists():
         weight_ref = os.environ.get("IMAGEREWARD_WEIGHTS_NAME", "ImageReward-v1.0")
 
     med_config = os.environ.get("IMAGEREWARD_MED_CONFIG")
+    if med_config is None:
+        local_med = WEIGHTS_ROOT / "med_config.json"
+        if local_med.is_file():
+            med_config = str(local_med)
     reward = load_imagereward(
         name=weight_ref,
         device=args.device,
@@ -128,7 +107,7 @@ def main(argv: Iterable[str] | None = None) -> None:
     parser.add_argument(
         "--weights",
         type=Path,
-        default=Path("weights/ImageReward-v1.0.pt"),
+        default=Path("weights/ImageReward.pt"),
         help="ImageReward 模型 checkpoint 路径（默认自动下载官方权重）。",
     )
     parser.add_argument(
@@ -164,12 +143,12 @@ def main(argv: Iterable[str] | None = None) -> None:
     images_dir = args.images.resolve()
     prompts_path = args.prompts.resolve()
 
-    image_files = _collect_images(images_dir, args.pattern)
-    prompts = _load_prompts(prompts_path)
+    image_files = collect_image_files(images_dir, args.pattern)
+    prompts = load_prompts_file(prompts_path)
 
     reward, weight_ref, download_root, med_config = _build_reward(args)
     scores, meta = _score(reward, image_files, prompts, args.batch_size, args.device)
-    stats = _summarize(scores)
+    stats = summarize_scores(scores)
 
     meta["weights"] = weight_ref
     if download_root is not None:

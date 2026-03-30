@@ -20,10 +20,10 @@ import click
 import torch
 from torchvision.utils import make_grid, save_image
 
-from sample import create_model_sd3
-from solvers import epd_sampler
-from solver_utils import get_schedule
+from sample import _prepare_sd3_condition, create_model_sd3
+from training.loss import get_solver_fn
 from training.networks import EPD_predictor
+from training.ppo.pipeline_utils import load_prompts_file, resolve_predictor_path
 
 
 # -----------------------------------------------------------------------------
@@ -59,19 +59,7 @@ def _load_prompts(prompt: str | None, prompt_file: str | None, count: int) -> Li
     if prompt is not None:
         return [prompt] * count
     if prompt_file:
-        path = Path(prompt_file)
-        lines: List[str] = []
-        if path.suffix.lower() == ".csv":
-            with path.open("r", encoding="utf-8") as f:
-                reader = csv.DictReader(f)
-                for row in reader:
-                    if "text" in row and row["text"].strip():
-                        lines.append(row["text"].strip())
-        else:
-            with path.open("r", encoding="utf-8") as f:
-                lines = [line.strip() for line in f if line.strip()]
-        if not lines:
-            raise RuntimeError(f"No prompts found in '{prompt_file}'.")
+        lines = load_prompts_file(prompt_file)
         reps = (count + len(lines) - 1) // len(lines)
         lines = (lines * reps)[:count]
         return lines
@@ -92,7 +80,12 @@ def _load_predictor(path: Path, device: torch.device) -> EPD_predictor:
 
 
 @click.command()
-@click.option("--predictor", type=click.Path(exists=True, dir_okay=False), required=True, help="EPD predictor .pkl.")
+@click.option(
+    "--predictor",
+    type=click.Path(exists=True, dir_okay=True, file_okay=True),
+    required=True,
+    help="EPD predictor .pkl or RL run directory.",
+)
 @click.option("--seeds", type=parse_int_list, default="0-3", show_default=True, help="Seed list/range.")
 @click.option("--prompt", type=str, default=None, help="Single prompt for all seeds.")
 @click.option("--prompt-file", type=click.Path(exists=True, dir_okay=False), default=None, help="Text/CSV prompt file.")
@@ -117,7 +110,7 @@ def main(
 ) -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    predictor_path = Path(predictor)
+    predictor_path = resolve_predictor_path(predictor)
     predictor_module = _load_predictor(predictor_path, device=device)
 
     cli_resolution: int | None = int(resolution) if resolution is not None else None
@@ -171,13 +164,19 @@ def main(
     seeds_tensor = torch.as_tensor(seeds)
     num_batches = ((len(seeds) - 1) // max_batch_size) + 1
     all_batches = seeds_tensor.tensor_split(num_batches)
+    sampler_name = getattr(predictor_module, "sampler_stu", "epd") or "epd"
+    if sampler_name == "epd":
+        sampler_name = "epd_parallel"
+    sampler_fn = get_solver_fn(sampler_name)
+    afs = bool(getattr(predictor_module, "afs", False))
 
     os.makedirs(outdir, exist_ok=True)
 
+    batch_start = 0
     for batch_idx, batch_seeds in enumerate(all_batches):
-        batch_prompts = prompts[
-            batch_idx * batch_seeds.numel() : batch_idx * batch_seeds.numel() + batch_seeds.numel()
-        ]
+        batch_size = int(batch_seeds.numel())
+        batch_prompts = prompts[batch_start : batch_start + batch_size]
+        batch_start += batch_size
         rnd = StackedRandomGenerator(device, batch_seeds)
         latents = rnd.randn(
             [len(batch_seeds), backend.img_channels, backend.img_resolution, backend.img_resolution],
@@ -185,14 +184,15 @@ def main(
             dtype=backend.pipeline.transformer.dtype,
         )
 
-        condition = backend.prepare_condition(
-            prompt=batch_prompts,
-            negative_prompt=None if predictor_module.guidance_rate == 1.0 else [""] * len(batch_prompts),
-            guidance_scale=predictor_module.guidance_rate,
+        condition = _prepare_sd3_condition(
+            backend,
+            batch_prompts,
+            predictor_module.guidance_rate,
+            backend_cfg,
         )
 
         with torch.no_grad():
-            images, _ = epd_sampler(
+            samples, _ = sampler_fn(
                 net=backend,
                 latents=latents,
                 condition=condition,
@@ -203,12 +203,12 @@ def main(
                 schedule_rho=predictor_module.schedule_rho,
                 guidance_type=predictor_module.guidance_type,
                 guidance_rate=predictor_module.guidance_rate,
-                predictor=predictor_module,
-                afs=False,
+                predictor=predictor_module if sampler_name.startswith("epd") else None,
+                afs=afs,
                 return_inters=False,
                 train=False,
             )
-            images = backend.vae_decode(images)
+            images = backend.vae_decode(samples)
 
         images = torch.clamp(images / 2 + 0.5, 0, 1)
 
