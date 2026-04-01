@@ -181,10 +181,12 @@ class PPOTrainer:
         if k == 1:
             advantages = rewards.clone()
         else:
-            num_prompts = rewards.numel() // k
-            # Rewards are prompt-major (each prompt repeated k times).
-            reshaped = rewards.view(num_prompts, k)
-            baseline = (reshaped.sum(dim=1, keepdim=True) - reshaped) / (k - 1)
+            num_groups = rewards.numel() // k
+            # Legacy mixed-prompt baseline mode: rewards arrive in sample-major
+            # order, so reshaping as (k, num_groups) intentionally mixes
+            # different prompts within each leave-one-out column.
+            reshaped = rewards.view(k, num_groups)
+            baseline = (reshaped.sum(dim=0, keepdim=True) - reshaped) / (k - 1)
             advantages = (reshaped - baseline).reshape(-1)
 
         advantages = advantages.to(self._device)

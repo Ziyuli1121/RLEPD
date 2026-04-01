@@ -289,7 +289,10 @@ class EPDRolloutRunner:
         self.backend_config = dict(cfg) if isinstance(cfg, dict) else {}
 
         self.prompts = _load_prompts(config.prompt_csv)
-        self.prompt_cursor = self.rank % len(self.prompts)
+        # Restore the intermediate prompt-major rollout behavior introduced in
+        # 3c58295: prompts are repeated contiguously rloo_k times, but PPO
+        # advantages are still computed with the legacy mixed baseline.
+        self.prompt_cursor = 0
         self.rloo_k = max(1, config.rloo_k)
 
         seed_value = config.rng_seed if config.rng_seed is not None else int(time.time())
@@ -308,15 +311,16 @@ class EPDRolloutRunner:
         prompts: List[str] = []
         seeds: List[int] = []
         unique_prompts = batch_size // self.rloo_k
-        start_index = self.prompt_cursor
-        for idx in range(unique_prompts):
-            prompt_index = (start_index + idx * self.world_size) % len(self.prompts)
-            prompt = self.prompts[prompt_index]
+        # Intermediate rollout semantics: sample a prompt once, then emit
+        # rloo_k seeded variants contiguously before advancing to the next
+        # prompt. This matches the state after 3c58295 but before 29987d4.
+        for _ in range(unique_prompts):
+            prompt = self.prompts[self.prompt_cursor]
+            self.prompt_cursor = (self.prompt_cursor + 1) % len(self.prompts)
             for _ in range(self.rloo_k):
                 prompts.append(prompt)
                 seed = int(self.seed_rng.randint(0, 2**32 - 1))
                 seeds.append(seed)
-        self.prompt_cursor = (start_index + unique_prompts * self.world_size) % len(self.prompts)
         return prompts, seeds
 
     def _prepare_latents(self, seeds: Sequence[int], shape: Tuple[int, ...]) -> torch.Tensor:

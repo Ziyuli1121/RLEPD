@@ -6,3 +6,4 @@ src/ms_coco/
 weights/
 latency_runs/
 diffusers/
+samples/

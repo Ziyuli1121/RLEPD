@@ -53,7 +53,7 @@ reward:
       clip_path: "weights/clip"
 
 ppo:
-  rollout_batch_size: 4
+  rollout_batch_size: 8
   rloo_k: 4
   ppo_epochs: 1
   minibatch_size: 4
@@ -63,7 +63,7 @@ ppo:
   entropy_coef: 0.0
   max_grad_norm: 1.0
   decode_rgb: true
-  steps: 99999
+  steps: 20000
   dirichlet_concentration: 10
   train_scale_dir: false
   train_scale_time: false

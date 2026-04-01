@@ -4,7 +4,7 @@ This file is a durable project context note for future coding/research agents wo
 
 Goal: make the repo easier to re-enter without re-deriving the pipeline, the algorithm intent, the main code paths, and the current engineering constraints from scratch.
 
-Last refreshed: 2026-03-29
+Last refreshed: 2026-03-31
 
 ## 1. Project Summary
 
@@ -59,6 +59,16 @@ Important scope boundary:
 - As of 2026-03-29, a real smoke run has exercised cold-start, train, export, and sample for `sd1.5`, `sd3-512`, and `sd3-1024`.
 - `flux` is now wired into the same pipeline, but its runtime still depends on an environment whose installed `diffusers` exposes `FluxPipeline`.
 - Not every metric/backbone combination or long-running training regime has been proven.
+
+Important current project choice:
+
+- As of 2026-03-31, the intended algorithm for formal `FLUX.1-dev` EPD-Solver training in this checkout is the historical intermediate state between commits:
+  - `3c58295b7ab7b564ebc3a3337680704b8eec0a70`
+  - `29987d46524d65637f8b9f1daddf75922943fb61`
+- That means:
+  - rollout prompt layout is `prompt-major`
+  - PPO advantage computation still uses the legacy mixed-prompt leave-one-out baseline
+- Future agents should not silently "fix" this back to standard same-prompt RLOO unless the user explicitly asks for that change.
 
 ## 4. Fixed End-to-End Pipeline
 
@@ -115,6 +125,10 @@ Important default training behavior:
 - official configs currently use `reward.type=multi`
 - but the shipped backbone configs set `hps=1.0` and other metric weights to `0.0`
 - so the default training behavior is effectively HPS-only, even though the multi-reward framework is already wired in
+- the currently intended FLUX training semantics are not standard same-prompt RLOO:
+  - `rl_runner.py` emits prompt-major batches
+  - `ppo_trainer.py` still computes advantages with the historical mixed-prompt baseline (`view(k, num_groups)` with leave-one-out over `dim=0`)
+  - example: with `rollout_batch_size=8` and `rloo_k=4`, rollout generation layout is `2` prompts with `4` images each, but PPO advantage groups are still mixed across those prompt blocks
 
 Important current configs:
 
@@ -278,6 +292,11 @@ Important details:
 
 This is the main meaning of "Residual Dirichlet Policy Optimization" in the current codebase.
 
+This detail matters for baseline design:
+
+- because the policy is not prompt-conditioned, the historical mixed-prompt baseline can empirically behave differently from standard same-prompt RLOO
+- future agents should not assume that "same-prompt RLOO" is automatically the intended or best objective for current FLUX training
+
 ### `training/ppo/rl_runner.py`
 
 `EPDRolloutRunner` is the bridge between PPO and legacy sampling:
@@ -289,6 +308,32 @@ This is the main meaning of "Residual Dirichlet Policy Optimization" in the curr
 - returns images and rollout metadata for PPO
 
 This file is where "RL policy world" meets "existing solver world".
+
+Important current semantic note:
+
+- The current desired FLUX training mode uses the historical intermediate rollout layout:
+  - prompts are emitted in prompt-major order
+  - each prompt is repeated contiguously `rloo_k` times before advancing
+- For `rollout_batch_size=8, rloo_k=4`, the generated prompt layout is:
+  - `[p0, p0, p0, p0, p1, p1, p1, p1]`
+- This rollout layout should not be confused with the PPO baseline semantics; see `ppo_trainer.py` below.
+
+### `training/ppo/ppo_trainer.py`
+
+`PPOTrainer` computes leave-one-out advantages and runs PPO updates.
+
+Important current semantic note:
+
+- As of 2026-03-31, the intended FLUX training path in this checkout uses the legacy mixed-prompt baseline, not standard prompt-major RLOO.
+- The current advantage code reshapes rewards as:
+  - `rewards.view(k, num_groups)`
+  - and computes leave-one-out baselines over `dim=0`
+- Combined with the prompt-major rollout layout above, `rollout_batch_size=8, rloo_k=4` gives:
+  - generated images for `2` prompts, `4` images each
+  - but PPO advantage groups are column-wise mixed:
+    - `{r0, r2, r4, r6}`
+    - `{r1, r3, r5, r7}`
+- This is intentionally the historical intermediate behavior between `3c58295` and `29987d4`.
 
 ### `training/ppo/export_epd_predictor.py`
 
@@ -593,6 +638,11 @@ Also preserve this semantic invariant:
 - it does not condition the policy on prompt text or image content
 - if that assumption is changed later, the rollout interface, policy signature, export semantics, and comparison methodology all need to be re-audited
 
+Also preserve this current intent:
+
+- for `FLUX.1-dev` formal training in this checkout, the user currently wants the historical intermediate mixed-baseline algorithm, not the later same-prompt RLOO revision
+- many successful 2025-11 to 2025-12 `sd1.5` / `sd3` experiments were produced during this intermediate algorithm state
+
 ### 12.6 `TEST.sh` is the main full smoke script
 
 `TEST.sh` is currently the most important one-command validation path for this repo.
@@ -637,6 +687,27 @@ The validated smoke run still emitted a few warnings that did not block correctn
 - `reward_hps.py` still uses a deprecated `torch.cuda.amp.autocast(...)` form
 - the installed `diffusers` path emits `torch_dtype` deprecation warnings
 - Pillow image save calls emit a future deprecation warning for the `mode` argument
+
+### 12.10 Current FLUX training objective is historically pinned on purpose
+
+There are three distinct algorithm states in repo history:
+
+1. original mixed-prompt:
+   - rollout sampled prompts sample-by-sample
+   - PPO used `view(k, num_groups)` with leave-one-out over `dim=0`
+2. intermediate state:
+   - rollout changed to prompt-major contiguous repeats in `3c58295`
+   - PPO still used the old mixed-prompt baseline
+3. later standard RLOO:
+   - PPO changed to `view(num_prompts, k)` with leave-one-out over `dim=1` in `29987d4`
+
+Current intended FLUX training in this checkout uses state 2.
+
+Why this note exists:
+
+- multiple strong 2025-11/2025-12 `sd1.5` and `sd3` experiments were produced during state 2
+- the user currently wants to carry that same algorithm family over to full `FLUX.1-dev` EPD-Solver training
+- future agents should therefore treat state 2 as intentional project behavior, not as an accidental half-migration that should be cleaned up automatically
 
 Future agents can clean these up, but they should not misclassify them as evidence that the pipeline failed.
 

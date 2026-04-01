@@ -56,6 +56,7 @@ Optional:
 Useful entry scripts:
 
 - [train.sh](./train.sh): cold-start + RL train + export examples
+- [train_flux.sh](./train_flux.sh): dedicated FLUX.1-dev cold-start + RL train + export entrypoint
 - [launch.sh](./launch.sh): end-to-end launch examples
 - [sample_flux.sh](./sample_flux.sh): FLUX.1-dev EPD replay example
 - [sample_flux_baseline.sh](./sample_flux_baseline.sh), [test_flux.sh](./test_flux.sh): FLUX.1-dev baseline/formal-eval examples
