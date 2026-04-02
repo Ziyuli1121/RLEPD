@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/flux_baseline_euler_20",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 0.294677734375,
+    "std": 0.041900634765625,
+    "min": 0.10601806640625,
+    "max": 0.400146484375
+  },
+  "metadata": {
+    "duration": 90.74893641471863,
+    "num_images": 1000,
+    "batch_size": 8,
+    "device": "cuda"
+  }
+}

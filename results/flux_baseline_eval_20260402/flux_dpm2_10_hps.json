@@ -1,0 +1,18 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/flux_baseline_dpm2_10",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 0.297119140625,
+    "std": 0.040496826171875,
+    "min": 0.146484375,
+    "max": 0.395263671875
+  },
+  "metadata": {
+    "duration": 48.98573088645935,
+    "num_images": 1000,
+    "batch_size": 8,
+    "device": "cuda"
+  }
+}

@@ -210,16 +210,15 @@ score_all_metrics_dir() {
         --weights "${aesthetic_weights}" \
         --output-json "${results_dir}/${prefix}_aesthetic.json"
 
-    if [[ -d "${RLEPD_ROOT}/weights/PickScore_v1" || "${ENABLE_PICKSCORE_DOWNLOAD:-0}" == "1" ]]; then
-        python -m training.ppo.scripts.score_pick \
-            --images "${image_dir}" \
-            --pattern "**/*.png" \
-            --prompts "${prompt_file}" \
-            --weights "${pickscore_weights}" \
-            --output-json "${results_dir}/${prefix}_pick.json"
-    else
-        echo "[pipeline_common.sh] Skipping PickScore for ${prefix}: local weights/PickScore_v1 is missing. Set ENABLE_PICKSCORE_DOWNLOAD=1 to force HF download." >&2
+    if [[ ! -d "${RLEPD_ROOT}/weights/PickScore_v1" ]]; then
+        echo "[pipeline_common.sh] Local weights/PickScore_v1 is missing for ${prefix}; falling back to Hugging Face download." >&2
     fi
+    python -m training.ppo.scripts.score_pick \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --prompts "${prompt_file}" \
+        --weights "${pickscore_weights}" \
+        --output-json "${results_dir}/${prefix}_pick.json"
 
     python -m training.ppo.scripts.score_imagereward \
         --images "${image_dir}" \

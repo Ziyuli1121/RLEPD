@@ -1,0 +1,19 @@
+{
+  "images_dir": "/work/nvme/betk/zli42/RLEPD/samples/flux_baseline_edm_10",
+  "pattern": "**/*.png",
+  "prompts_file": "/work/nvme/betk/zli42/RLEPD/src/prompts/test.txt",
+  "stats": {
+    "count": 1000,
+    "mean": 5.610404014587402,
+    "std": 0.6148295402526855,
+    "min": 3.553905487060547,
+    "max": 7.575711250305176
+  },
+  "metadata": {
+    "duration": 108.72981715202332,
+    "num_images": 1000,
+    "batch_size": 32,
+    "device": "cuda",
+    "weights": "/work/nvme/betk/zli42/RLEPD/weights/sac+logos+ava1-l14-linearMSE.pth"
+  }
+}

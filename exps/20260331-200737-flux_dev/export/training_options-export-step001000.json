@@ -1,0 +1,77 @@
+{
+  "loss_kwargs": {
+    "class_name": "training.loss.EPD_loss"
+  },
+  "pred_kwargs": {
+    "class_name": "training.networks.EPD_predictor",
+    "num_steps": 9,
+    "sampler_stu": "epd",
+    "sampler_tea": "dpm",
+    "M": 1,
+    "guidance_type": "cfg",
+    "guidance_rate": 3.5,
+    "schedule_rho": 1.0,
+    "schedule_type": "flowmatch",
+    "afs": false,
+    "dataset_name": "ms_coco",
+    "scale_dir": 0.0,
+    "scale_time": 0.0,
+    "num_points": 2,
+    "fcn": false,
+    "alpha": 10.0,
+    "max_order": 2,
+    "predict_x0": false,
+    "lower_order_final": true,
+    "img_resolution": 1024,
+    "backend": "flux",
+    "backend_config": {
+      "model_name_or_path": "/work/nvme/betk/zli42/RLEPD/weights/hf_cache/hub/models--black-forest-labs--FLUX.1-dev/snapshots/3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",
+      "torch_dtype": "bfloat16",
+      "enable_model_cpu_offload": false,
+      "model_id": "/work/nvme/betk/zli42/RLEPD/weights/hf_cache/hub/models--black-forest-labs--FLUX.1-dev/snapshots/3de623fc3c33e44ffbe2bad470d0f45bccf2eb21",
+      "resolution": 1024,
+      "latent_resolution": 128,
+      "sigma_min": 0.001,
+      "sigma_max": 1.0,
+      "flowmatch_mu": 1.15,
+      "flowmatch_shift": 3.0
+    },
+    "sigma_min": 0.001,
+    "sigma_max": 1.0,
+    "flowmatch_mu": 1.15,
+    "flowmatch_shift": 3.0
+  },
+  "optimizer_kwargs": {
+    "class_name": "torch.optim.Adam",
+    "lr": 0.01,
+    "betas": [
+      0.9,
+      0.999
+    ],
+    "eps": 1e-08
+  },
+  "cos_lr_schedule": false,
+  "alpha": 10.0,
+  "total_kimg": 5,
+  "kimg_per_tick": 1,
+  "snapshot_ticks": 5,
+  "state_dump_ticks": 5,
+  "dataset_name": "ms_coco",
+  "batch_size": 32,
+  "batch_gpu": null,
+  "gpus": 8,
+  "cudnn_benchmark": true,
+  "guidance_type": "cfg",
+  "guidance_rate": 3.5,
+  "prompt_path": null,
+  "seed": 0,
+  "run_dir": "./exps/fflux",
+  "export_info": {
+    "source_run": "/work/nvme/betk/zli42/RLEPD/exps/20260331-200737-flux_dev",
+    "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/exps/20260331-200737-flux_dev/checkpoints/policy-step001000.pt",
+    "sanitized_rows": {
+      "reordered_rows": 0,
+      "adjusted_rows": 0
+    }
+  }
+}

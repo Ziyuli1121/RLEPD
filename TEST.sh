@@ -497,12 +497,11 @@ run_full_eval_sd15() {
     run_metric training.ppo.scripts.score_mps \
         "${SD15_SAMPLE_DIR}" "${PROMPTS_5}" "${ROOT}/weights/MPS_overall_checkpoint.pth" "${RESULTS_ROOT}/sd15_mps.json"
 
-    if [[ -d "${ROOT}/weights/PickScore_v1" || "${ENABLE_PICKSCORE_DOWNLOAD:-0}" == "1" ]]; then
-        run_metric training.ppo.scripts.score_pick \
-            "${SD15_SAMPLE_DIR}" "${PROMPTS_5}" "${ROOT}/weights/PickScore_v1" "${RESULTS_ROOT}/sd15_pick.json"
-    else
-        log "Skipping PickScore: local weights/PickScore_v1 is missing. Set ENABLE_PICKSCORE_DOWNLOAD=1 to force HF download."
+    if [[ ! -d "${ROOT}/weights/PickScore_v1" ]]; then
+        log "Local weights/PickScore_v1 is missing; falling back to Hugging Face download."
     fi
+    run_metric training.ppo.scripts.score_pick \
+        "${SD15_SAMPLE_DIR}" "${PROMPTS_5}" "${ROOT}/weights/PickScore_v1" "${RESULTS_ROOT}/sd15_pick.json"
 
     require_file "${RESULTS_ROOT}/sd15_clip.json"
     require_file "${RESULTS_ROOT}/sd15_hps.json"
