@@ -1,0 +1,18 @@
+{
+  "run_dir": "/work/nvme/betk/zli42/RLEPD/exps/20260402-094545-flux_dev",
+  "policy_checkpoint": "/work/nvme/betk/zli42/RLEPD/exps/20260402-094545-flux_dev/checkpoints/policy-step002800.pt",
+  "export_step": 2800,
+  "timestamp": "2026-04-04T06:15:27.434584+00:00",
+  "sanitized_rows": {
+    "reordered": 0,
+    "adjusted": 0
+  },
+  "latest_metrics": {
+    "step": 2922,
+    "mixed_reward_mean": 0.2998504638671875,
+    "mixed_reward_std": 0.02263309434056282,
+    "kl": 18.18260669708252,
+    "policy_loss": -0.0032946616411209106,
+    "elapsed_sec": 128949.86344885826
+  }
+}

@@ -182,15 +182,15 @@ if __name__ == "__main__":
 '''
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251123-215008-sd3_smoke/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20260402-094545-flux_dev/logs/metrics.jsonl \
     --metrics hps_mean \
     --smooth-window 500 \
-    --output exp_visuals/sd3/hps_mean.png
+    --output exp_visuals/flux/hps_mean.png
 
 python exp_visuals/scripts/plot_metrics.py \
-    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20251123-215008-sd3_smoke/logs/metrics.jsonl \
+    --metrics-file /work/nvme/betk/zli42/RLEPD/exps/20260402-094545-flux_dev/logs/metrics.jsonl \
     --metrics kl \
     --smooth-window 0 \
-    --output exp_visuals/sd3/kl.png
+    --output exp_visuals/flux/kl.png
 
 '''

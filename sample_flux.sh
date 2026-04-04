@@ -19,10 +19,10 @@ MODEL_ID="${MODEL_ID:-${FLUX_MODEL_PATH:-}}"
 SAMPLER="${SAMPLER:-euler}"
 NUM_STEPS="${NUM_STEPS:-}"
 BASELINE_SOLVERS="${BASELINE_SOLVERS:-euler edm dpm2 ipndm}"
-BASELINE_EULER_STEPS="${BASELINE_EULER_STEPS:-28}"
-BASELINE_EDM_STEPS="${BASELINE_EDM_STEPS:-14}"
-BASELINE_DPM2_STEPS="${BASELINE_DPM2_STEPS:-14}"
-BASELINE_IPNDM_STEPS="${BASELINE_IPNDM_STEPS:-28}"
+BASELINE_EULER_STEPS="${BASELINE_EULER_STEPS:-24}"
+BASELINE_EDM_STEPS="${BASELINE_EDM_STEPS:-12}"
+BASELINE_DPM2_STEPS="${BASELINE_DPM2_STEPS:-12}"
+BASELINE_IPNDM_STEPS="${BASELINE_IPNDM_STEPS:-24}"
 
 resolve_baseline_steps() {
   local sampler="$1"
@@ -117,3 +117,40 @@ case "${MODE}" in
     exit 1
     ;;
 esac
+
+
+
+# MODE=baseline_sweep \
+# MODEL_ID=/work/nvme/betk/zli42/RLEPD/weights/hf_cache/hub/models--black-forest-labs--FLUX.1-dev/snapshots/3de623fc3c33e44ffbe2bad470d0f45bccf2eb21 \
+# PROMPT_FILE=src/prompts/test.txt \
+# SEEDS=0-999 \
+# OUTDIR=samples/flux_baseline \
+# ./sample_flux.sh
+
+
+
+
+# conda activate epd
+# cd /work/nvme/betk/zli42/RLEPD
+# source scripts/pipeline_common.sh
+
+# RESULTS_DIR=results/flux_baseline_eval_20260404
+
+# score_all_metrics_dir "samples/flux_baseline_dpm2_10"  "src/prompts/test.txt" "flux_dpm2_10"  "$RESULTS_DIR"
+# score_all_metrics_dir "samples/flux_baseline_edm_10"   "src/prompts/test.txt" "flux_edm_10"   "$RESULTS_DIR"
+# score_all_metrics_dir "samples/flux_baseline_euler_20" "src/prompts/test.txt" "flux_euler_20" "$RESULTS_DIR"
+# score_all_metrics_dir "samples/flux_baseline_ipndm_20" "src/prompts/test.txt" "flux_ipndm_20" "$RESULTS_DIR"
+
+
+python -m training.ppo.export_epd_predictor \
+  exps/20260402-094545-flux_dev \
+  --checkpoint checkpoints/policy-step002800.pt
+
+
+
+# MODE=epd \
+# PREDICTOR=/work/nvme/betk/zli42/RLEPD/exps/20260402-094545-flux_dev/export/network-snapshot-export-step002800.pkl \
+# PROMPT_FILE=src/prompts/test.txt \
+# SEEDS=0-999 \
+# OUTDIR=samples/flux_epd_step002800 \
+# ./sample_flux.sh
