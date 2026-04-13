@@ -406,8 +406,6 @@ def main() -> None:
 
     if args.epd_predictor and args.epd_run_dir:
         raise SystemExit("Specify either --epd-predictor or --epd-run-dir, not both.")
-    if not args.epd_predictor and not args.epd_run_dir:
-        raise SystemExit("One of --epd-predictor or --epd-run-dir must be provided.")
     if args.epd_checkpoint and not args.epd_run_dir:
         raise SystemExit("--epd-checkpoint requires --epd-run-dir.")
     if args.batch_size < 1:
@@ -443,28 +441,31 @@ def main() -> None:
     backend.pipeline.set_progress_bar_config(disable=True)
 
     predictor_path: Optional[Path] = None
-    if args.epd_predictor:
-        predictor_path = resolve_predictor_path(args.epd_predictor)
-    else:
-        export_dir = outdir / "epd_export"
-        export_result = export_policy_mean_to_predictor(
-            Path(args.epd_run_dir),
-            checkpoint=Path(args.epd_checkpoint) if args.epd_checkpoint else None,
-            output_dir=export_dir,
-            device="cpu",
-            include_manifest=True,
-        )
-        predictor_path = export_result.snapshot_path
+    predictor: Optional[EPD_predictor] = None
+    epd_resolved_flux: Optional[Dict[str, Any]] = None
+    if args.epd_predictor or args.epd_run_dir:
+        if args.epd_predictor:
+            predictor_path = resolve_predictor_path(args.epd_predictor)
+        else:
+            export_dir = outdir / "epd_export"
+            export_result = export_policy_mean_to_predictor(
+                Path(args.epd_run_dir),
+                checkpoint=Path(args.epd_checkpoint) if args.epd_checkpoint else None,
+                output_dir=export_dir,
+                device="cpu",
+                include_manifest=True,
+            )
+            predictor_path = export_result.snapshot_path
 
-    predictor = _load_predictor(Path(predictor_path), device=device)
-    epd_resolved_flux = resolve_flux_runtime_metadata(
-        backend_options=dict(getattr(predictor, "backend_config", {}) or backend_cfg),
-        resolution=getattr(predictor, "img_resolution", None) or 1024,
-        sigma_min=getattr(predictor, "sigma_min", None),
-        sigma_max=getattr(predictor, "sigma_max", None),
-        flowmatch_mu=getattr(predictor, "flowmatch_mu", None),
-        flowmatch_shift=getattr(predictor, "flowmatch_shift", None),
-    )
+        predictor = _load_predictor(Path(predictor_path), device=device)
+        epd_resolved_flux = resolve_flux_runtime_metadata(
+            backend_options=dict(getattr(predictor, "backend_config", {}) or backend_cfg),
+            resolution=getattr(predictor, "img_resolution", None) or 1024,
+            sigma_min=getattr(predictor, "sigma_min", None),
+            sigma_max=getattr(predictor, "sigma_max", None),
+            flowmatch_mu=getattr(predictor, "flowmatch_mu", None),
+            flowmatch_shift=getattr(predictor, "flowmatch_shift", None),
+        )
 
     specs: List[SolverSpec] = []
     for solver_name in baseline_solvers:
@@ -487,14 +488,17 @@ def main() -> None:
                 sigma_max=float(resolved_flux["sigma_max"]),
             )
         )
-    specs.append(
-        _build_epd_spec(
-            predictor,
-            str(predictor_path),
-            sigma_min=float(epd_resolved_flux["sigma_min"]),
-            sigma_max=float(epd_resolved_flux["sigma_max"]),
+    if predictor is not None and predictor_path is not None and epd_resolved_flux is not None:
+        specs.append(
+            _build_epd_spec(
+                predictor,
+                str(predictor_path),
+                sigma_min=float(epd_resolved_flux["sigma_min"]),
+                sigma_max=float(epd_resolved_flux["sigma_max"]),
+            )
         )
-    )
+    if not specs:
+        raise SystemExit("Nothing to benchmark: provide --baseline-solvers and/or --epd-predictor/--epd-run-dir.")
 
     summary_rows: List[Dict[str, Any]] = []
     latency_records: List[Dict[str, Any]] = []
@@ -642,7 +646,7 @@ def main() -> None:
             "save_first_image": bool(args.save_first_image),
             "timing_scope_sampling": "conditioning + latent generation + solver denoising (no decode, no image writes)",
             "timing_scope_e2e": "conditioning + latent generation + solver denoising + decode/postprocess (no image writes)",
-            "epd_predictor_path": str(predictor_path),
+            "epd_predictor_path": str(predictor_path) if predictor_path is not None else None,
         },
         "solvers": summary_rows,
     }
@@ -683,8 +687,36 @@ python benchmark_flux_solver_latency.py \
   --prompt-file src/prompts/test.txt \
   --seeds 0-99 \
   --batch-size 1 \
-  --baseline-solvers euler,edm \
-  --epd-predictor exps/20260402-094545-flux_dev/export/network-snapshot-export-step002800.pkl \
-  --outdir results/flux_solver_latency_step002800_euler_edm_24
+  --baseline-solvers euler,edm,dpm2,ipndm \
+  --euler-steps 16 \
+  --edm-steps 8 \
+  --dpm2-steps 9 \
+  --ipndm-steps 17 \
+  --outdir results/latency_baseline_16
 
+python benchmark_flux_solver_latency.py \
+  --model-id /work/nvme/betk/zli42/RLEPD/weights/hf_cache/hub/models--black-forest-labs--FLUX.1-dev/snapshots/3de623fc3c33e44ffbe2bad470d0f45bccf2eb21 \
+  --prompt-file src/prompts/test.txt \
+  --seeds 0-99 \
+  --batch-size 1 \
+  --baseline-solvers euler,edm,dpm2,ipndm \
+  --euler-steps 20 \
+  --edm-steps 10 \
+  --dpm2-steps 11 \
+  --ipndm-steps 21 \
+  --outdir results/latency_baseline_20
+
+python benchmark_flux_solver_latency.py \
+  --model-id /work/nvme/betk/zli42/RLEPD/weights/hf_cache/hub/models--black-forest-labs--FLUX.1-dev/snapshots/3de623fc3c33e44ffbe2bad470d0f45bccf2eb21 \
+  --prompt-file src/prompts/test.txt \
+  --seeds 0-99 \
+  --batch-size 1 \
+  --baseline-solvers euler,edm,dpm2,ipndm \
+  --euler-steps 24 \
+  --edm-steps 12 \
+  --dpm2-steps 13 \
+  --ipndm-steps 25 \
+  --epd-predictor exps/20260402-094545-flux_dev/export/network-snapshot-export-step002800.pkl \
+  --outdir results/latency_baseline_epd_24
+  
 '''

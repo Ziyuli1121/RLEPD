@@ -8,3 +8,6 @@ latency_runs/
 diffusers/
 samples/
 results/
+src/coco10k_real_val2014/
+src/val2014/
+src/val2014.zip
