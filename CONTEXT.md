@@ -4,7 +4,7 @@ This file is a durable project context note for future coding/research agents wo
 
 Goal: make the repo easier to re-enter without re-deriving the pipeline, the algorithm intent, the main code paths, and the current engineering constraints from scratch.
 
-Last refreshed: 2026-03-31
+Last refreshed: 2026-04-12
 
 ## 1. Project Summary
 
@@ -210,6 +210,7 @@ Entrypoints:
 - `training/ppo/scripts/score_pick.py`
 - `training/ppo/scripts/score_imagereward.py`
 - `training/ppo/scripts/score_mps.py`
+- `training/ppo/scripts/score_fid_dir.py`
 
 Responsibilities:
 
@@ -217,6 +218,12 @@ Responsibilities:
 - Resolve local weights first.
 - Fall back to remote downloads only if local weights are absent.
 - Emit JSON score summaries under `results/`.
+- For formal FLUX fidelity evaluation, `score_fid_dir.py` computes:
+  - `FID-10k (fixed COCO subset, clean preprocessing, native 1024 generation)`
+  - fake images from a generated sample directory
+  - real reference from `src/coco10k_real_val2014`
+  - protocol source of truth from `src/prompts/coco10k.csv`
+- `score_fid_dir.py` uses `clean-fid` and caches custom real stats under `results/fid_cache/`.
 - `test_flux.sh` now generates a prompt subset file aligned to the sampled seeds before scoring, so its default `1 image` FLUX eval path is valid.
 - FLUX formal eval defaults to full metrics on the EPD sample and generation-only checks for baseline solver sweeps.
 

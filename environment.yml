@@ -30,6 +30,7 @@ dependencies:
       - kornia
       - fairscale
       - piq
+      - clean-fid
       - accelerate>=0.31.0
       - huggingface-hub>=0.34.0,<2.0
       - safetensors>=0.3.1

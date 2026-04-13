@@ -235,6 +235,35 @@ score_all_metrics_dir() {
         --output-json "${results_dir}/${prefix}_mps.json"
 }
 
+score_fid_dir() {
+    local image_dir="$1"
+    local manifest_csv="$2"
+    local real_dir="$3"
+    local prefix="$4"
+    local results_dir="${5:-${RLEPD_RESULTS_DIR_DEFAULT}}"
+    local fid_cache_dir="${RLEPD_RESULTS_DIR_DEFAULT}/fid_cache"
+    if [[ -z "${image_dir}" || -z "${manifest_csv}" || -z "${real_dir}" || -z "${prefix}" ]]; then
+        echo "Usage: score_fid_dir <image_dir> <manifest_csv> <real_dir> <result_prefix> [results_dir]" >&2
+        return 1
+    fi
+
+    require_dir "${image_dir}" || return 1
+    require_file "${manifest_csv}" || return 1
+    require_dir "${real_dir}" || return 1
+    mkdir -p "${results_dir}" "${fid_cache_dir}"
+
+    python -m training.ppo.scripts.score_fid_dir \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --manifest "${manifest_csv}" \
+        --real-images "${real_dir}" \
+        --cache-dir "${fid_cache_dir}" \
+        --mode clean \
+        --eval-res 256 \
+        --num-workers 2 \
+        --output-json "${results_dir}/${prefix}_fid.json"
+}
+
 score_all_metrics() {
     local name="$1"
     local prompt_file="${2:-${RLEPD_PROMPTS_TXT_DEFAULT}}"
