@@ -211,6 +211,7 @@ Entrypoints:
 - `training/ppo/scripts/score_imagereward.py`
 - `training/ppo/scripts/score_mps.py`
 - `training/ppo/scripts/score_fid_dir.py`
+- `training/ppo/scripts/score_fid_npz_dir.py`
 
 Responsibilities:
 
@@ -224,6 +225,10 @@ Responsibilities:
   - real reference from `src/coco10k_real_val2014`
   - protocol source of truth from `src/prompts/coco10k.csv`
 - `score_fid_dir.py` uses `clean-fid` and caches custom real stats under `results/fid_cache/`.
+- `score_fid_npz_dir.py` computes a separate legacy auxiliary metric:
+  - Inception-FID against precomputed reference stats from `src/ms_coco-512x512.npz`
+  - this is not the same protocol as `score_fid_dir.py`
+  - do not mix or directly compare those two FID numbers in one table without explicit labeling
 - `test_flux.sh` now generates a prompt subset file aligned to the sampled seeds before scoring, so its default `1 image` FLUX eval path is valid.
 - FLUX formal eval defaults to full metrics on the EPD sample and generation-only checks for baseline solver sweeps.
 

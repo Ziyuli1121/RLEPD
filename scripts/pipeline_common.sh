@@ -264,6 +264,31 @@ score_fid_dir() {
         --output-json "${results_dir}/${prefix}_fid.json"
 }
 
+score_fid_npz_dir() {
+    local image_dir="$1"
+    local ref_npz="$2"
+    local prefix="$3"
+    local results_dir="${4:-${RLEPD_RESULTS_DIR_DEFAULT}}"
+    if [[ -z "${image_dir}" || -z "${ref_npz}" || -z "${prefix}" ]]; then
+        echo "Usage: score_fid_npz_dir <image_dir> <ref_npz> <result_prefix> [results_dir]" >&2
+        return 1
+    fi
+
+    require_dir "${image_dir}" || return 1
+    require_file "${ref_npz}" || return 1
+    mkdir -p "${results_dir}"
+
+    python -m training.ppo.scripts.score_fid_npz_dir \
+        --images "${image_dir}" \
+        --pattern "**/*.png" \
+        --ref-npz "${ref_npz}" \
+        --num-expected 10000 \
+        --batch-size 64 \
+        --num-workers 2 \
+        --device cuda \
+        --output-json "${results_dir}/${prefix}_legacy_fid.json"
+}
+
 score_all_metrics() {
     local name="$1"
     local prompt_file="${2:-${RLEPD_PROMPTS_TXT_DEFAULT}}"

@@ -57,6 +57,10 @@ For formal FLUX fidelity evaluation, this checkout also supports:
 
 6. Compute `FID-10k (fixed COCO subset)` with `python -m training.ppo.scripts.score_fid_dir`
 
+This checkout also provides a separate legacy auxiliary metric:
+
+7. Compute `legacy Inception-FID` against `src/ms_coco-512x512.npz` with `python -m training.ppo.scripts.score_fid_npz_dir`
+
 Useful entry scripts:
 
 - [train.sh](./train.sh): cold-start + RL train + export examples
@@ -71,6 +75,7 @@ Useful entry scripts:
 - [TEST.sh](./TEST.sh): GPU smoke test for `sd1.5`, `sd3-512`, `sd3-1024`, and `flux`
 - [environment.flux.yml](./environment.flux.yml): pinned FLUX single-node runtime based on the validated `epd` environment
 - [training/ppo/scripts/score_fid_dir.py](./training/ppo/scripts/score_fid_dir.py): formal `FID-10k` scoring entrypoint using clean-fid on a fixed COCO subset
+- [training/ppo/scripts/score_fid_npz_dir.py](./training/ppo/scripts/score_fid_npz_dir.py): legacy auxiliary FID scoring entrypoint against `src/ms_coco-512x512.npz`
 
 ## FLUX.1-dev Notes
 
@@ -100,6 +105,10 @@ Useful entry scripts:
   - real subset: `src/coco10k_real_val2014`
   - scorer: `python -m training.ppo.scripts.score_fid_dir --mode clean --eval-res 256`
 - `environment.flux.yml` now includes `clean-fid` for that formal FID path
+- Legacy auxiliary FID runs can separately use:
+  - reference stats: `src/ms_coco-512x512.npz`
+  - scorer: `python -m training.ppo.scripts.score_fid_npz_dir`
+  - this metric is not directly comparable to the clean-fid COCO-10k protocol above
 - FLUX runtime preflight is intentionally lightweight: it checks the known-good package family, local/remote model reachability, and that the installed `diffusers` package contains the FLUX pipeline files needed by this checkout
 - Treat official FLUX Euler and project-side `ddim(flowmatch)` as different baselines; they are close, but not strictly equivalent
 
