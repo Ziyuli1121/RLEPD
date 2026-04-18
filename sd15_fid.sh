@@ -49,5 +49,29 @@ CUDA_VISIBLE_DEVICES=1 MASTER_PORT=29502 python sample_baseline.py \
   --num-steps 50 \
   --outdir samples/sd15_ddim_coco10k
 
+CUDA_VISIBLE_DEVICES=0 python sample_baseline.py \
+  --sampler edm \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 8 \
+  --num-steps 25 \
+  --outdir samples/sd15_edm_coco10k
+
+CUDA_VISIBLE_DEVICES=0 python sample_baseline.py \
+  --sampler dpm2 \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 8 \
+  --num-steps 25 \
+  --outdir samples/sd15_dpm2_coco10k
+
+CUDA_VISIBLE_DEVICES=0 python sample_baseline.py \
+  --sampler ipndm \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 8 \
+  --num-steps 50 \
+  --max-order 4 \
+  --outdir samples/sd15_ipndm_coco10k
 
 

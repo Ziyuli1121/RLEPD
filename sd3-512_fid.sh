@@ -27,3 +27,34 @@ CUDA_VISIBLE_DEVICES=1 python sample_sd3_baseline.py \
   --batch 4 \
   --num-steps 28 \
   --outdir samples/sd3_512_euler_coco10k
+
+CUDA_VISIBLE_DEVICES=1 python sample_sd3_baseline.py \
+  --sampler edm \
+  --resolution 512 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 4 \
+  --num-steps 14 \
+  --outdir samples/sd3_512_edm_coco10k
+
+CUDA_VISIBLE_DEVICES=1 python sample_sd3_baseline.py \
+  --sampler dpm2 \
+  --resolution 512 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 4 \
+  --num-steps 14 \
+  --outdir samples/sd3_512_dpm2_coco10k
+
+CUDA_VISIBLE_DEVICES=1 python sample_sd3_baseline.py \
+  --sampler ipndm \
+  --resolution 512 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 4 \
+  --num-steps 28 \
+  --max-order 3 \
+  --outdir samples/sd3_512_ipndm_coco10k

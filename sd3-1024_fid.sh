@@ -11,19 +11,52 @@ source "${CONDA_BASE}/etc/profile.d/conda.sh"
 conda activate epd
 cd /work/nvme/betk/zli42/RLEPD
 
-CUDA_VISIBLE_DEVICES=1 python sample_sd3.py \
-  --predictor exps/best_models/sd3-1024/sd3-1024-best.pkl \
-  --prompt-file src/prompts/coco10k.txt \
-  --seeds 0-9999 \
-  --max-batch-size 2 \
-  --outdir samples/sd3_1024_best_coco10k
+# CUDA_VISIBLE_DEVICES=1 python sample_sd3.py \
+#   --predictor exps/best_models/sd3-1024/sd3-1024-best.pkl \
+#   --prompt-file src/prompts/coco10k.txt \
+#   --seeds 0-9999 \
+#   --max-batch-size 2 \
+#   --outdir samples/sd3_1024_best_coco10k
+
+# CUDA_VISIBLE_DEVICES=0 python sample_sd3_baseline.py \
+#   --sampler sd3 \
+#   --resolution 1024 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/coco10k.txt \
+#   --seeds 0-9999 \
+#   --batch 4 \
+#   --num-steps 28 \
+#   --outdir samples/sd3_1024_euler_coco10k
+
+# CUDA_VISIBLE_DEVICES=0 python sample_sd3_baseline.py \
+#   --sampler edm \
+#   --resolution 1024 \
+#   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+#   --prompt-file src/prompts/coco10k.txt \
+#   --seeds 0-9999 \
+#   --batch 8 \
+#   --num-steps 14 \
+#   --outdir samples/sd3_1024_edm_coco10k
 
 CUDA_VISIBLE_DEVICES=0 python sample_sd3_baseline.py \
-  --sampler sd3 \
+  --sampler dpm2 \
   --resolution 1024 \
   --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
   --prompt-file src/prompts/coco10k.txt \
   --seeds 0-9999 \
-  --batch 4 \
+  --batch 8 \
+  --num-steps 14 \
+  --outdir samples/sd3_1024_dpm2_coco10k
+
+CUDA_VISIBLE_DEVICES=0 python sample_sd3_baseline.py \
+  --sampler ipndm \
+  --resolution 1024 \
+  --model-id "stabilityai/stable-diffusion-3-medium-diffusers" \
+  --prompt-file src/prompts/coco10k.txt \
+  --seeds 0-9999 \
+  --batch 8 \
   --num-steps 28 \
-  --outdir samples/sd3_1024_euler_coco10k
+  --max-order 3 \
+  --outdir samples/sd3_1024_ipndm_coco10k
+
+
